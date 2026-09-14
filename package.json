@@ -1,0 +1,25 @@
+{
+  "name": "daily-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "One page with everything on your plate today: Linear, GitLab, Slack, Calendar, Notion.",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "check": "tsc --noEmit",
+    "demo": "DEMO=1 tsx src/server.ts",
+    "doctor": "tsx src/doctor.ts"
+  },
+  "dependencies": {
+    "node-ical": "^0.20.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

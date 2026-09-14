@@ -1,0 +1,46 @@
+# Paste this at api.slack.com/apps → Create New App → From an app manifest.
+#
+# It requests USER scopes only: the app acts as you, reading what you can
+# already read. It has no bot user, no event subscriptions, no slash commands,
+# and no redirect URLs — nothing in the workspace can invoke it, and it cannot
+# post, edit, or delete anything.
+#
+# Change the name if you like; everything else should stay as-is.
+
+display_information:
+  name: Daily Dashboard
+  description: Read-only personal dashboard — shows my own mentions and unread DMs on a local page.
+  long_description: >-
+    A personal productivity dashboard that runs entirely on my own laptop at
+    localhost. It reads my Slack mentions and unread direct messages and shows
+    them next to my Linear issues, GitLab merge requests and calendar, so I do
+    not have to check five tools each morning.
+
+    It requests user scopes only, so it can read exactly what I can already read
+    in the Slack client and nothing more. It has no bot user and no write
+    scopes: it cannot post, edit, delete, or react to anything. No message
+    content is stored or transmitted anywhere — data is fetched on demand,
+    rendered in my browser, and held in memory for ninety seconds.
+  background_color: "#1f2933"
+
+oauth_config:
+  scopes:
+    user:
+      # Find messages that @-mention me.
+      - search:read
+      # List my DMs and read the unread messages in them.
+      - im:read
+      - im:history
+      # The same for group DMs.
+      - mpim:read
+      - mpim:history
+      # Turn user ids into display names.
+      - users:read
+
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
+  event_subscriptions: {}
+  interactivity:
+    is_enabled: false
