@@ -371,6 +371,8 @@ function renderSection(section) {
   head.append(makeGrip(card));
   head.append(el('h2', 'card__title', section.label));
   if (section.items.length) head.append(el('span', 'card__count', String(section.items.length)));
+  // Unread indicator, visible even when the card is collapsed.
+  if (section.unread > 0) head.append(el('span', 'card__unread', `${section.unread} unread`));
   card.append(head);
   attachCardDrag(card);
   attachCollapse(card, head, section.key);

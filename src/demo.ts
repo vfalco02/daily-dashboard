@@ -51,6 +51,7 @@ export function demoBrief(): Brief {
         key: 'slack-mentions',
         label: 'Slack · mentions',
         source: 'slack',
+        unread: 1,
         items: [
           {
             id: 's1',
@@ -185,13 +186,16 @@ export function demoBrief(): Brief {
         key: 'slack-channel-engineering',
         label: '#engineering',
         source: 'channels',
+        unread: 1,
         items: [
           {
             id: 'ch1',
             title: 'Dana Whitfield',
             excerpt: 'Deploy is green — 2026.34 is out. Thanks all.',
+            badges: [{ label: 'Unread', tone: 'info' }],
             timestamp: at(-12),
             rank: 0,
+            tone: 'info',
           },
           {
             id: 'ch2',

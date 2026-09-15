@@ -44,6 +44,8 @@ export type Section = {
   emptyLabel?: string;
   /** Cap the visible rows to this many; the rest scroll within the card. */
   maxVisible?: number;
+  /** Count of unread items, surfaced as a badge in the card header. */
+  unread?: number;
 };
 
 export type SourceKey = 'linear' | 'gitlab' | 'slack' | 'calendar' | 'channels';

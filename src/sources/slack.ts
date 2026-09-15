@@ -144,6 +144,11 @@ function excerpt(text: string, max = 220): string {
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
+/** How many items carry the "Unread" badge — surfaced in the card header. */
+function unreadCount(items: Item[]): number {
+  return items.filter((item) => item.badges?.some((b) => b.label === 'Unread')).length;
+}
+
 const MENTION_WINDOW_DAYS = 7;
 
 /** `after:` is date-granular and workspace-TZ based, so widen it by a day and
@@ -414,18 +419,29 @@ export async function fetchWatchedChannels(): Promise<Section[]> {
       return { ...section, error: `Channel #${channel.name} not found — are you a member?` };
     }
     try {
-      const history = await slack<HistoryResponse>('conversations.history', { channel: channel.id, limit });
+      const [history, info] = await Promise.all([
+        slack<HistoryResponse>('conversations.history', { channel: channel.id, limit }),
+        slack<ConversationInfoResponse>('conversations.info', { channel: channel.id }).catch(() => ({ ok: false }) as ConversationInfoResponse),
+      ]);
+      const lastRead = Number.parseFloat(info.channel?.last_read ?? '');
       const messages = (history.messages ?? []).filter((m) => !m.subtype);
       const names = await resolveUserNames(messages.flatMap((m) => [m.user, ...mentionedUserIds(m.text ?? '')].filter(Boolean) as string[]));
-      section.items = messages.map((message, index_): Item => ({
-        id: `slack:chan:${channel.id}:${message.ts}`,
-        title: message.user ? (names.get(message.user) ?? message.user) : 'message',
-        url: `slack://channel?team=${me.team}&id=${channel.id}`,
-        excerpt: excerpt(flatten(message.text ?? '', names)),
-        timestamp: tsToIso(message.ts),
-        rank: index_,
-        tone: 'neutral',
-      }));
+      section.items = messages.map((message, index_): Item => {
+        // Unread = arrived after your last read of the channel, and not your own.
+        const unread =
+          Number.isFinite(lastRead) && message.user !== me.user_id && Number.parseFloat(message.ts) > lastRead;
+        return {
+          id: `slack:chan:${channel.id}:${message.ts}`,
+          title: message.user ? (names.get(message.user) ?? message.user) : 'message',
+          url: `slack://channel?team=${me.team}&id=${channel.id}`,
+          excerpt: excerpt(flatten(message.text ?? '', names)),
+          badges: unread ? [{ label: 'Unread', tone: 'info' }] : undefined,
+          timestamp: tsToIso(message.ts),
+          rank: index_,
+          tone: unread ? 'info' : 'neutral',
+        };
+      });
+      section.unread = unreadCount(section.items);
       return section;
     } catch (error) {
       return { ...section, error: error instanceof Error ? error.message : String(error) };
@@ -477,15 +493,21 @@ export async function fetchSlack(): Promise<Section[]> {
 
   if (mentionResult.status === 'fulfilled') {
     mentions.items = mentionResult.value.direct;
+    mentions.unread = unreadCount(mentions.items);
     aliases.items = mentionResult.value.alias;
+    aliases.unread = unreadCount(aliases.items);
   } else {
     const message = mentionResult.reason instanceof Error ? mentionResult.reason.message : String(mentionResult.reason);
     mentions.error = message;
     aliases.error = message;
   }
 
-  if (dmResult.status === 'fulfilled') dms.items = dmResult.value;
-  else dms.error = dmResult.reason instanceof Error ? dmResult.reason.message : String(dmResult.reason);
+  if (dmResult.status === 'fulfilled') {
+    dms.items = dmResult.value;
+    dms.unread = dms.items.length; // everything in this section is unread by definition
+  } else {
+    dms.error = dmResult.reason instanceof Error ? dmResult.reason.message : String(dmResult.reason);
+  }
 
   return [mentions, aliases, dms];
 }
