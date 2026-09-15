@@ -144,4 +144,13 @@ export const SETTINGS_FIELDS: SettingField[] = [
   },
   rowsField('Calendar', 'ROWS_CALENDAR', '0'),
   rowsField('Reminders', 'ROWS_REMINDERS', '0'),
+  {
+    key: 'REFRESH_SECONDS',
+    integration: 'General',
+    label: 'Auto-refresh (seconds)',
+    secret: false,
+    number: true,
+    default: '120',
+    help: 'How often the page re-fetches. 0 turns auto-refresh off; minimum 15s.',
+  },
 ];

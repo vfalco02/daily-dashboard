@@ -1,4 +1,5 @@
-const AUTO_REFRESH_MS = 120_000;
+const DEFAULT_REFRESH_SECONDS = 120;
+const MIN_REFRESH_SECONDS = 15;
 
 const board = document.getElementById('board');
 const chipsEl = document.getElementById('chips');
@@ -7,6 +8,31 @@ const refreshButton = document.getElementById('refresh');
 const settingsButton = document.getElementById('settings');
 const greetingEl = document.getElementById('greeting');
 const dateEl = document.getElementById('date');
+const refreshNoteEl = document.getElementById('refresh-note');
+
+// ---- Auto-refresh timer (interval is configurable in Settings) --------------
+
+let refreshTimer = null;
+let currentRefreshSeconds = null;
+
+function describeInterval(seconds) {
+  if (seconds % 3600 === 0) return `every ${seconds / 3600} hour${seconds === 3600 ? '' : 's'}`;
+  if (seconds % 60 === 0) return `every ${seconds / 60} minute${seconds === 60 ? '' : 's'}`;
+  return `every ${seconds} seconds`;
+}
+
+/** (Re)arm the auto-refresh timer; 0 turns it off. Only acts when the value changes. */
+function applyRefreshInterval(seconds) {
+  const value = seconds > 0 ? Math.max(seconds, MIN_REFRESH_SECONDS) : 0;
+  if (value === currentRefreshSeconds) return;
+  currentRefreshSeconds = value;
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+  if (value > 0) refreshTimer = setInterval(() => load({ force: true }), value * 1000);
+  if (refreshNoteEl) refreshNoteEl.textContent = value > 0 ? `auto-refreshes ${describeInterval(value)}` : 'auto-refresh off';
+}
 
 const SOURCE_LABELS = {
   reminders: 'Reminders',
@@ -436,6 +462,7 @@ function render(brief) {
 
   lastBrief = brief;
   rowCaps = brief.rows || {};
+  applyRefreshInterval(brief.refreshSeconds ?? DEFAULT_REFRESH_SECONDS);
 
   // Reminders is a draggable card like any other; it just uses the persistent node.
   // Sources toggled off via the top-bar pills are left out of the board.
@@ -952,7 +979,7 @@ window.addEventListener('resize', () => {
   resizeTimer = setTimeout(capScrollSections, 150);
 });
 
-setInterval(() => load({ force: true }), AUTO_REFRESH_MS);
+applyRefreshInterval(DEFAULT_REFRESH_SECONDS); // until the first brief sets the configured value
 setInterval(setStatus, 30_000);
 load();
 loadReminders();

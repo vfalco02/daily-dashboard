@@ -19,6 +19,7 @@ export function demoBrief(): Brief {
     generatedAt: new Date().toISOString(),
     durationMs: 0,
     rows: { linear: 0, gitlab: 0, slack: 5, calendar: 0, reminders: 0 },
+    refreshSeconds: 120,
     sections: [
       {
         key: 'calendar-today',

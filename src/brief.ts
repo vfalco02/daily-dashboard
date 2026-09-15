@@ -70,6 +70,7 @@ export async function buildBrief(): Promise<Brief> {
       calendar: config.rows.calendar,
       reminders: config.rows.reminders,
     },
+    refreshSeconds: config.refreshSeconds,
   };
 }
 

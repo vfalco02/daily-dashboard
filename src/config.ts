@@ -55,6 +55,10 @@ export const config = {
   get cacheTtlSeconds() {
     return int('CACHE_TTL_SECONDS', 90);
   },
+  /** Seconds between the page's automatic refreshes (0 = off); applied client-side. */
+  get refreshSeconds() {
+    return int('REFRESH_SECONDS', 120);
+  },
   linear: {
     get apiKey() {
       return str('LINEAR_API_KEY');
