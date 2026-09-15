@@ -47,11 +47,18 @@ Always run `npm run check` before considering a change done.
   Never commit credentials.
 - **Config is live via getters** — a value saved in Settings takes effect on the
   next request, no restart. Don't destructure `config.*` into a constant at import.
-- **Adding a source:** create `src/sources/<name>.ts` exporting
-  `() => Promise<Section[]>`, add it to `LOADERS` in `src/brief.ts`, add a
-  `rows.<name>` getter in `config.ts` + a `brief.rows` entry, and (optionally)
-  settings fields in `SETTINGS_FIELDS`. Sorting, caching, error isolation, and
-  rendering are all shared.
+- **Adding a source** (both server and client need touching):
+  - Server: create `src/sources/<name>.ts` exporting `() => Promise<Section[]>`;
+    add it to `LOADERS` in `src/brief.ts` and `SOURCE_LOADERS` in `src/server.ts`
+    (the `/api/test` map); add a `rows.<name>` getter in `config.ts` + a
+    `brief.rows` entry; add its `SourceKey` in `types.ts`; add settings fields in
+    `SETTINGS_FIELDS`.
+  - Client (`public/app.js`): add a `SOURCE_LABELS[<name>]` (drives the pill) and
+    put the source in a `COLUMN_GROUPS` entry (else it lands in column 0).
+  - CSS (`public/styles.css`): add `--src-<name>` (light + dark) and a
+    `[data-source='<name>'] { --source-color: … }` line for the accent.
+  - Sorting, caching, per-source error isolation, scroll caps, drag, collapse, and
+    show/hide are all shared once the above is in place.
 - **Frontend is plain DOM** in `public/app.js` — build nodes with the `el()`
   helper; no framework. Per-viewer UI state (card layout, collapsed cards, hidden
   sources) is in `localStorage`; server-side state (settings, reminders) is JSON files.
@@ -67,5 +74,6 @@ Always run `npm run check` before considering a change done.
 
 ## Git
 
-Repo: `https://gitlab.com/vinny_falcone/daily-dashboard.git`, branch `main`. Commit and push
-only when asked.
+Repo: GitLab `vinny_falcone/daily-dashboard`, branch `main`. The `origin` remote
+uses SSH (`git@gitlab.com:vinny_falcone/daily-dashboard.git`); HTTPS has no stored
+token in this environment. Commit and push only when asked.
