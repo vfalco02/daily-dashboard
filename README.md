@@ -35,6 +35,10 @@ npm run doctor
 It exercises the same code paths the dashboard uses and prints a line per source —
 what worked, what failed, and the specific fix. A clean run means the page will work.
 
+When the checkout is behind its git remote, an **Update** button appears in the top
+bar (checked on load and every 15 min). Click it to fast-forward pull; UI-only
+changes reload automatically, and code changes prompt you to restart the server.
+
 Other scripts: `npm run dev` (restart on file changes), `npm run check` (typecheck).
 
 Every source is optional. Anything you leave blank renders as a hint card instead
