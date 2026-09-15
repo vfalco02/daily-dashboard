@@ -452,10 +452,9 @@ function renderChips(sections) {
 }
 
 function updateTitle(sections) {
-  const actionable = sections
-    .filter((section) => section.source !== 'calendar')
-    .reduce((total, section) => total + section.items.length, 0);
-  document.title = actionable ? `(${actionable}) Today` : 'Today';
+  // Title badge reflects unread only (Slack DMs and watched channels).
+  const unread = sections.reduce((total, section) => total + (section.unread || 0), 0);
+  document.title = unread ? `(${unread}) Today` : 'Today';
 }
 
 function render(brief) {
