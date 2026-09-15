@@ -67,5 +67,5 @@ Always run `npm run check` before considering a change done.
 
 ## Git
 
-Repo: `git@github.com:vfalco02/daily-dashboard.git`, branch `main`. Commit and push
+Repo: `https://gitlab.com/vinny_falcone/daily-dashboard.git`, branch `main`. Commit and push
 only when asked.
