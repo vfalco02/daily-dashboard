@@ -126,12 +126,35 @@ function renderSection(section) {
   }
 
   if (section.items.length) {
-    for (const item of section.items) card.append(renderItem(item));
+    // When capped, items live in a scroll container we height-limit after layout.
+    const host = section.maxVisible ? el('div', 'card__scroll') : card;
+    for (const item of section.items) host.append(renderItem(item));
+    if (host !== card) {
+      if (section.items.length > section.maxVisible) host.dataset.maxVisible = String(section.maxVisible);
+      card.append(host);
+    }
   } else if (!section.error) {
     card.append(el('p', 'card__empty', section.hint ?? section.emptyLabel ?? 'Nothing here.'));
   }
 
   return card;
+}
+
+/**
+ * Cap each scroll container to exactly N rows. Row heights vary (excerpts wrap),
+ * so measure the top of row N+1 rather than guessing a pixel height.
+ */
+function capScrollSections() {
+  for (const host of board.querySelectorAll('.card__scroll[data-max-visible]')) {
+    const max = Number(host.dataset.maxVisible);
+    const rows = host.children;
+    if (rows.length > max) {
+      const cut = rows[max].offsetTop - host.firstElementChild.offsetTop;
+      host.style.maxHeight = `${cut}px`;
+    } else {
+      host.style.maxHeight = '';
+    }
+  }
 }
 
 function renderChips(sections) {
@@ -193,6 +216,7 @@ function render(brief) {
   }
   board.setAttribute('aria-busy', 'false');
   mountReminders();
+  capScrollSections();
 
   if (typing && reminderInput) {
     reminderInput.focus();
@@ -412,6 +436,13 @@ document.addEventListener('keydown', (event) => {
 // Coming back to the tab should show something current, not this morning's state.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') load();
+});
+
+// Row heights change when the column width changes; re-measure the caps.
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(capScrollSections, 150);
 });
 
 setInterval(() => load({ force: true }), AUTO_REFRESH_MS);

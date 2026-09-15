@@ -42,6 +42,8 @@ export type Section = {
   error?: string;
   /** Message shown when the section fetched fine but has nothing in it. */
   emptyLabel?: string;
+  /** Cap the visible rows to this many; the rest scroll within the card. */
+  maxVisible?: number;
 };
 
 export type SourceKey = 'linear' | 'gitlab' | 'slack' | 'calendar';

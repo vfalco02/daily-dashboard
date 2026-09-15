@@ -214,7 +214,7 @@ function matchKey(m: SlackMatch): string {
   return m.iid ?? `${m.channel?.id}-${m.ts}`;
 }
 
-async function fetchMentions(me: AuthResponse, groups: UserGroups): Promise<Item[]> {
+async function fetchMentions(me: AuthResponse, groups: UserGroups): Promise<{ direct: Item[]; alias: Item[] }> {
   const count = String(config.slack.mentionLimit);
   const after = afterDate(MENTION_WINDOW_DAYS);
 
@@ -252,7 +252,7 @@ async function fetchMentions(me: AuthResponse, groups: UserGroups): Promise<Item
     resolveUserNames(entries.flatMap((h) => mentionedUserIds(h.match.text ?? '')), groups.byId),
   ]);
 
-  return entries.map(({ match, direct: isDirect, aliases }, index): Item => {
+  const toItem = ({ match, aliases }: MentionHit, index: number, showAlias: boolean): Item => {
     const channel = match.channel?.name
       ? `#${match.channel.name}`
       : match.channel?.is_im
@@ -264,8 +264,7 @@ async function fetchMentions(me: AuthResponse, groups: UserGroups): Promise<Item
 
     const badges: Badge[] = [];
     if (unread) badges.push({ label: 'Unread', tone: 'warn' });
-    // Show which alias caught it, unless it was also a direct ping to you.
-    if (!isDirect && aliases.size) badges.push({ label: [...aliases].join(', '), tone: 'neutral' });
+    if (showAlias && aliases.size) badges.push({ label: [...aliases].join(', '), tone: 'neutral' });
 
     return {
       id: `slack:mention:${matchKey(match)}`,
@@ -279,7 +278,16 @@ async function fetchMentions(me: AuthResponse, groups: UserGroups): Promise<Item
       rank: (unread ? 0 : 1000) + index,
       tone: unread ? 'warn' : 'muted',
     };
-  });
+  };
+
+  // A message that pinged you directly belongs under direct mentions, even if a
+  // group also caught it; the rest are alias-only.
+  const direct_ = entries.filter((h) => h.direct);
+  const alias_ = entries.filter((h) => !h.direct);
+  return {
+    direct: direct_.map((h, i) => toItem(h, i, false)),
+    alias: alias_.map((h, i) => toItem(h, i, true)),
+  };
 }
 
 async function fetchUnreadDms(me: AuthResponse, groups: UserGroups): Promise<Item[]> {
@@ -351,7 +359,16 @@ export async function fetchSlack(): Promise<Section[]> {
     label: 'Slack · mentions',
     source: 'slack',
     items: [],
-    emptyLabel: 'No recent mentions.',
+    emptyLabel: 'No direct mentions.',
+    maxVisible: 5,
+  };
+  const aliases: Section = {
+    key: 'slack-aliases',
+    label: 'Slack · @-alias mentions',
+    source: 'slack',
+    items: [],
+    emptyLabel: 'No alias mentions.',
+    maxVisible: 5,
   };
   const dms: Section = {
     key: 'slack-dms',
@@ -359,12 +376,14 @@ export async function fetchSlack(): Promise<Section[]> {
     source: 'slack',
     items: [],
     emptyLabel: 'No unread direct messages.',
+    maxVisible: 5,
   };
 
   if (!config.slack.userToken) {
     const hint = 'Set SLACK_USER_TOKEN (a user token, xoxp-…) in .env to enable.';
     return [
       { ...mentions, hint },
+      { ...aliases, hint },
       { ...dms, hint },
     ];
   }
@@ -379,11 +398,17 @@ export async function fetchSlack(): Promise<Section[]> {
     fetchUnreadDms(me, groups),
   ]);
 
-  if (mentionResult.status === 'fulfilled') mentions.items = mentionResult.value;
-  else mentions.error = mentionResult.reason instanceof Error ? mentionResult.reason.message : String(mentionResult.reason);
+  if (mentionResult.status === 'fulfilled') {
+    mentions.items = mentionResult.value.direct;
+    aliases.items = mentionResult.value.alias;
+  } else {
+    const message = mentionResult.reason instanceof Error ? mentionResult.reason.message : String(mentionResult.reason);
+    mentions.error = message;
+    aliases.error = message;
+  }
 
   if (dmResult.status === 'fulfilled') dms.items = dmResult.value;
   else dms.error = dmResult.reason instanceof Error ? dmResult.reason.message : String(dmResult.reason);
 
-  return [mentions, dms];
+  return [mentions, aliases, dms];
 }

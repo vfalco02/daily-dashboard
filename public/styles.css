@@ -429,6 +429,29 @@ body {
 
 /* ---------- footer ---------- */
 
+/* ---------- scrollable section body ---------- */
+
+.card__scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.card__scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.card__scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+/* The last visible row's divider would otherwise touch the scrollbar edge. */
+.card__scroll .item:last-child {
+  border-bottom: none;
+}
+
 /* ---------- reminders widget ---------- */
 
 .reminder-add {
