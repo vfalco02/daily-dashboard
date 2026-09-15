@@ -74,6 +74,10 @@ like a password: anyone holding it can read your calendar. Set
   re-hit every API.
 - The browser tab title carries the count of actionable items, so it reads as a
   badge when pinned.
+- **Rearrange the cards** by dragging the grip (⠿) in any card header — within a
+  column or across to another (empty columns appear as drop targets while you
+  drag). The arrangement is saved per-browser in `localStorage`, so it sticks
+  across refreshes and restarts. Clearing site data resets it to the default.
 
 ## Reminders
 

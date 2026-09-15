@@ -28,6 +28,143 @@ const COLUMN_GROUPS = [
   { key: 'gitlab', sources: ['gitlab'] },
 ];
 
+const NUM_COLUMNS = 3;
+
+// ---- Draggable layout -------------------------------------------------------
+// The card arrangement is a per-viewer preference, so it lives in localStorage:
+// an array of NUM_COLUMNS arrays of card keys.
+
+const LAYOUT_KEY = 'dashboard.layout.v1';
+
+function loadLayout() {
+  try {
+    return JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function saveLayout(columns) {
+  try {
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify(columns));
+  } catch {
+    // Private mode or blocked storage — arrangement just won't persist.
+  }
+}
+
+/** Default column for a card whose key isn't in the saved layout (new source, first run). */
+function defaultColumnIndex(source) {
+  if (source === 'reminders') return 0;
+  const index = COLUMN_GROUPS.findIndex((group) => group.sources.includes(source));
+  return index >= 0 ? index : 0;
+}
+
+/** Order cards into NUM_COLUMNS columns: saved layout first, then any newcomers by default. */
+function computeColumns(cards) {
+  const byKey = new Map(cards.map((card) => [card.key, card]));
+  const columns = Array.from({ length: NUM_COLUMNS }, () => []);
+  const placed = new Set();
+
+  const saved = loadLayout();
+  if (Array.isArray(saved)) {
+    saved.slice(0, NUM_COLUMNS).forEach((keys, i) => {
+      if (!Array.isArray(keys)) return;
+      for (const key of keys) {
+        if (byKey.has(key) && !placed.has(key)) {
+          columns[i].push(byKey.get(key));
+          placed.add(key);
+        }
+      }
+    });
+  }
+
+  for (const card of cards) {
+    if (placed.has(card.key)) continue;
+    columns[defaultColumnIndex(card.source)].push(card);
+    placed.add(card.key);
+  }
+  return columns;
+}
+
+/** Read the current DOM arrangement back into a layout and persist it. */
+function persistLayout() {
+  const columns = [...board.querySelectorAll(':scope > .column')].map((col) =>
+    [...col.querySelectorAll(':scope > .card')].map((card) => card.dataset.key).filter(Boolean),
+  );
+  saveLayout(columns);
+}
+
+/** Empty columns collapse, except while dragging when they show as drop targets. */
+function markEmptyColumns() {
+  for (const col of board.querySelectorAll(':scope > .column')) {
+    col.classList.toggle('column--empty', col.querySelector(':scope > .card') == null);
+  }
+}
+
+let draggedCard = null;
+
+/** A grip in the card header that arms dragging (so links/scroll still work elsewhere). */
+function makeGrip(card) {
+  const grip = el('button', 'card__grip', '⠿');
+  grip.type = 'button';
+  grip.title = 'Drag to move';
+  grip.setAttribute('aria-label', 'Drag to move card');
+  grip.addEventListener('mousedown', () => {
+    card.draggable = true;
+  });
+  grip.addEventListener('click', (event) => event.preventDefault());
+  return grip;
+}
+
+function attachCardDrag(card) {
+  card.addEventListener('dragstart', (event) => {
+    draggedCard = card;
+    card.classList.add('dragging');
+    board.classList.add('board--dragging');
+    event.dataTransfer.effectAllowed = 'move';
+    try {
+      event.dataTransfer.setData('text/plain', card.dataset.key || '');
+    } catch {
+      // Some browsers are picky about setData; the drag still works without it.
+    }
+  });
+  card.addEventListener('dragend', () => {
+    card.classList.remove('dragging');
+    card.draggable = false;
+    board.classList.remove('board--dragging');
+    draggedCard = null;
+    markEmptyColumns();
+    persistLayout();
+  });
+  // A grip press that didn't become a drag shouldn't leave the card armed.
+  card.addEventListener('mouseup', () => {
+    card.draggable = false;
+  });
+}
+
+/** The card the dragged one should be inserted before, by vertical midpoint. */
+function dragAfterElement(column, y) {
+  const cards = [...column.querySelectorAll(':scope > .card:not(.dragging)')];
+  let closest = { offset: -Infinity, element: null };
+  for (const child of cards) {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) closest = { offset, element: child };
+  }
+  return closest.element;
+}
+
+function attachColumnDrop(column) {
+  column.addEventListener('dragover', (event) => {
+    if (!draggedCard) return;
+    event.preventDefault();
+    const after = dragAfterElement(column, event.clientY);
+    if (after == null) column.append(draggedCard);
+    else column.insertBefore(draggedCard, after);
+    markEmptyColumns();
+  });
+}
+
 let lastGeneratedAt = null;
 
 function greeting() {
@@ -113,11 +250,14 @@ function renderSection(section) {
   const card = el('section', 'card');
   card.id = `section-${section.key}`;
   card.dataset.source = section.source;
+  card.dataset.key = section.key;
 
   const head = el('div', 'card__head');
+  head.append(makeGrip(card));
   head.append(el('h2', 'card__title', section.label));
   if (section.items.length) head.append(el('span', 'card__count', String(section.items.length)));
   card.append(head);
+  attachCardDrag(card);
 
   if (section.error) {
     card.append(el('p', 'card__note card__note--error', section.error));
@@ -185,39 +325,30 @@ function updateTitle(sections) {
   document.title = actionable ? `(${actionable}) Today` : 'Today';
 }
 
-/** Buckets sections into their column, preserving the server's ordering. */
-function groupIntoColumns(sections) {
-  const columns = COLUMN_GROUPS.map((group) => ({ key: group.key, sections: [] }));
-  const indexBySource = new Map();
-  COLUMN_GROUPS.forEach((group, index) => {
-    for (const source of group.sources) indexBySource.set(source, index);
-  });
-
-  for (const section of sections) {
-    const index = indexBySource.get(section.source) ?? 0;
-    columns[index].sections.push(section);
-  }
-
-  return columns.filter((column) => column.sections.length > 0);
-}
-
 function render(brief) {
   // The board rebuild detaches the reminders card; remember caret/focus so an
   // auto-refresh never interrupts typing.
   const typing = document.activeElement === reminderInput;
   const caret = typing ? [reminderInput.selectionStart, reminderInput.selectionEnd] : null;
 
-  board.replaceChildren();
-  const columns = groupIntoColumns(brief.sections);
-  for (const column of columns) {
-    const node = el('div', 'column');
-    for (const section of column.sections) node.append(renderSection(section));
-    board.append(node);
-  }
-  board.setAttribute('aria-busy', 'false');
-  mountReminders();
-  capScrollSections();
+  // Reminders is a draggable card like any other; it just uses the persistent node.
+  const cards = [
+    { key: 'reminders', source: 'reminders', el: ensureRemindersCard() },
+    ...brief.sections.map((section) => ({ key: section.key, source: section.source, el: renderSection(section) })),
+  ];
 
+  board.replaceChildren();
+  for (const colCards of computeColumns(cards)) {
+    const colEl = el('div', 'column');
+    for (const card of colCards) colEl.append(card.el);
+    attachColumnDrop(colEl);
+    board.append(colEl);
+  }
+  markEmptyColumns();
+  board.setAttribute('aria-busy', 'false');
+
+  renderReminderList();
+  capScrollSections();
   if (typing && reminderInput) {
     reminderInput.focus();
     if (caret) reminderInput.setSelectionRange(caret[0], caret[1]);
@@ -240,12 +371,15 @@ let reminders = [];
 function buildRemindersCard() {
   const card = el('section', 'card');
   card.dataset.source = 'reminders';
+  card.dataset.key = 'reminders';
 
   const head = el('div', 'card__head');
+  head.append(makeGrip(card));
   head.append(el('h2', 'card__title', 'Reminders'));
   reminderCountEl = el('span', 'card__count');
   head.append(reminderCountEl);
   card.append(head);
+  attachCardDrag(card);
 
   const form = el('form', 'reminder-add');
   reminderInput = el('input');
@@ -285,20 +419,23 @@ function buildRemindersCard() {
   return card;
 }
 
-/** Keep the reminders card pinned to the top of the first column (create one if the board is empty). */
-function mountReminders() {
+function ensureRemindersCard() {
   if (!remindersCard) remindersCard = buildRemindersCard();
-  let firstColumn = board.querySelector('.column');
-  if (!firstColumn) {
-    firstColumn = el('div', 'column');
-    board.append(firstColumn);
-  }
-  firstColumn.prepend(remindersCard);
+  return remindersCard;
+}
+
+/** Used only on the error path, where the brief failed but reminders should still work. */
+function mountRemindersFallback() {
+  const colEl = el('div', 'column');
+  colEl.append(ensureRemindersCard());
+  attachColumnDrop(colEl);
+  board.append(colEl);
+  markEmptyColumns();
   renderReminderList();
 }
 
 function renderReminderList() {
-  if (!reminderListEl) return; // card not built yet; mountReminders() will call again
+  if (!reminderListEl) return; // card not built yet; render() will call again
   const active = reminders.filter((r) => !r.done);
   const done = reminders.filter((r) => r.done);
   reminderCountEl.textContent = active.length ? String(active.length) : '';
@@ -413,7 +550,7 @@ async function load({ force = false } = {}) {
       board.replaceChildren(el('p', 'placeholder', `Could not reach the dashboard server: ${error.message}`));
     }
     // Reminders are local, so keep them usable even when the brief can't load.
-    mountReminders();
+    mountRemindersFallback();
   } finally {
     refreshButton.disabled = false;
   }

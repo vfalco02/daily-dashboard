@@ -205,42 +205,90 @@ body {
 
 /* ---------- board ---------- */
 
+/* Flex (not grid) so empty columns collapse to nothing and can be revealed as
+   drop zones during a drag. Wrap + min-width gives a natural 3 -> 2 -> 1 fall. */
 .board {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-wrap: wrap;
   gap: 16px;
-  align-items: start;
+  align-items: flex-start;
   max-width: var(--content-max);
   margin-inline: auto;
 }
 
-/* Capped at three: past that the rows stop reading as one glance, and each
-   card gets too wide for what is really a list of short lines. */
-@media (min-width: 860px) {
-  .board {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (min-width: 1280px) {
-  .board {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-/* One column per source group; cards inside stack vertically. */
+/* One column per source group; cards inside stack vertically. Capped at three
+   columns by content width, never more. */
 .column {
+  flex: 1 1 0;
+  min-width: 300px;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  min-width: 0;
+}
+
+/* Empty columns take no space — until a drag is in progress, when they appear
+   as labelled drop targets. */
+.column--empty {
+  display: none;
+}
+
+.board--dragging .column--empty {
+  display: flex;
+  min-height: 90px;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+.board--dragging .column--empty::before {
+  content: 'Drop here';
+  margin: auto;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .board {
+    flex-direction: column;
+  }
+  .column {
+    min-width: 0;
+  }
 }
 
 .placeholder {
-  grid-column: 1 / -1;
+  width: 100%;
   padding: 40px 0;
   color: var(--text-faint);
   text-align: center;
+}
+
+/* ---------- drag handle & drag state ---------- */
+
+.card__grip {
+  flex-shrink: 0;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font-size: 14px;
+  line-height: 1;
+  cursor: grab;
+  opacity: 0.5;
+}
+
+.card__grip:hover {
+  opacity: 1;
+  color: var(--source-color, var(--text));
+}
+
+.card.dragging {
+  opacity: 0.4;
+  outline: 2px solid var(--source-color, var(--accent));
+  outline-offset: -1px;
+}
+
+.board--dragging .card:not(.dragging) {
+  transition: transform 0.12s ease;
 }
 
 .card {
