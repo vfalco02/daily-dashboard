@@ -9,6 +9,7 @@ const greetingEl = document.getElementById('greeting');
 const dateEl = document.getElementById('date');
 
 const SOURCE_LABELS = {
+  reminders: 'Reminders',
   calendar: 'Calendar',
   slack: 'Slack',
   linear: 'Linear',
@@ -394,8 +395,12 @@ function renderChips(sections) {
   chipsEl.replaceChildren();
   const bySource = new Map();
 
+  // Reminders leads — it's a client-side widget, not a fetched section; its count
+  // is the number of open (incomplete) reminders.
+  bySource.set('reminders', { count: reminders.filter((r) => !r.done).length, issues: false });
+
   for (const section of sections) {
-    const entry = bySource.get(section.source) ?? { count: 0, anchor: section.key, issues: false };
+    const entry = bySource.get(section.source) ?? { count: 0, issues: false };
     entry.count += section.items.length;
     if (section.error) entry.issues = true;
     bySource.set(section.source, entry);
@@ -435,7 +440,7 @@ function render(brief) {
   // Reminders is a draggable card like any other; it just uses the persistent node.
   // Sources toggled off via the top-bar pills are left out of the board.
   const cards = [
-    { key: 'reminders', source: 'reminders', el: ensureRemindersCard() },
+    ...(hiddenSources.has('reminders') ? [] : [{ key: 'reminders', source: 'reminders', el: ensureRemindersCard() }]),
     ...brief.sections
       .filter((section) => !hiddenSources.has(section.source))
       .map((section) => ({ key: section.key, source: section.source, el: renderSection(section) })),
@@ -564,6 +569,9 @@ function renderReminderList() {
   if (cap && reminders.length > cap) reminderListEl.dataset.maxVisible = String(cap);
   else delete reminderListEl.dataset.maxVisible;
   capScrollSections();
+
+  // Keep the Reminders pill's count in sync as reminders are added/completed.
+  if (lastBrief) renderChips(lastBrief.sections);
 }
 
 function renderReminder(reminder) {
