@@ -74,6 +74,8 @@ Two ways to get the token into the app:
 - **Connect with Slack** (recommended) — paste the app's Client ID and Secret into
   **Settings → Slack**, save, then click **Connect with Slack** to authorize; the
   token is captured for you (env: `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`).
+  Authorizing sends you to Slack and back, which closes the settings popup — so
+  reopen **⚙ Settings → Slack** and hit **Save & test** to confirm it connected.
 - **Paste a token** — copy the User OAuth Token into **Settings → Slack → User
   token** (env: `SLACK_USER_TOKEN`).
 
