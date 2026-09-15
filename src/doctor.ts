@@ -102,9 +102,11 @@ async function checkSlack(): Promise<Result[]> {
   const results: Result[] = [];
 
   let identity: string;
+  let userId: string;
   try {
-    const me = await slack<{ ok: boolean; user: string; team: string }>('auth.test', {});
+    const me = await slack<{ ok: boolean; user: string; user_id: string; team: string }>('auth.test', {});
     identity = me.user;
+    userId = me.user_id;
     results.push({ status: 'ok', detail: `authenticated as @${me.user}` });
   } catch (error) {
     const message = errorMessage(error);
@@ -120,7 +122,7 @@ async function checkSlack(): Promise<Result[]> {
     ];
   }
 
-  const probes: { name: string; scope: string; run: () => Promise<string> }[] = [
+  const probes: { name: string; scope: string; optional?: boolean; run: () => Promise<string> }[] = [
     {
       name: 'mentions',
       scope: 'search:read',
@@ -130,6 +132,18 @@ async function checkSlack(): Promise<Result[]> {
           count: '1',
         });
         return `search works (${plural(found.messages?.matches?.length ?? 0, 'match', 'matches')} on a sample query)`;
+      },
+    },
+    {
+      name: 'aliases',
+      scope: 'usergroups:read',
+      optional: true,
+      run: async () => {
+        const res = await slack<{ ok: boolean; usergroups?: { users?: string[] }[] }>('usergroups.list', {
+          include_users: 'true',
+        });
+        const mine = (res.usergroups ?? []).filter((g) => (g.users ?? []).includes(userId)).length;
+        return `@-alias mentions on (you're in ${plural(mine, 'group')})`;
       },
     },
     {
@@ -157,6 +171,15 @@ async function checkSlack(): Promise<Result[]> {
     try {
       results.push({ status: 'ok', detail: await probe.run() });
     } catch (error) {
+      const missingScope = error instanceof SlackApiError && error.code === 'missing_scope';
+      // Optional features (e.g. alias mentions) shouldn't fail the whole check.
+      if (probe.optional && missingScope) {
+        results.push({
+          status: 'skip',
+          detail: `${probe.name}: add "${probe.scope}" to also catch @-alias mentions (optional).`,
+        });
+        continue;
+      }
       const needed = error instanceof SlackApiError ? error.needed : undefined;
       results.push({
         status: 'fail',

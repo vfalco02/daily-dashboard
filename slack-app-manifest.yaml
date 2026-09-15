@@ -36,6 +36,8 @@ oauth_config:
       - mpim:history
       # Turn user ids into display names.
       - users:read
+      # Find which @-alias (user group) mentions apply to me.
+      - usergroups:read
 
 settings:
   org_deploy_enabled: false

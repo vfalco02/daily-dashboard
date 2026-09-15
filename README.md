@@ -55,6 +55,7 @@ which pins the scopes to the read-only set:
 | `im:read`, `im:history` | unread DMs |
 | `mpim:read`, `mpim:history` | unread group DMs |
 | `users:read` | names on those DMs |
+| `usergroups:read` | mentions of @-aliases (user groups) you're in |
 
 Most workspaces require an admin to approve the install.
 **[docs/slack-setup.md](docs/slack-setup.md)** walks through the manifest, the

@@ -1,6 +1,6 @@
 import { config } from '../config.js';
 import { mapLimit, requestJson } from '../http.js';
-import type { Item, Section } from '../types.js';
+import type { Badge, Item, Section } from '../types.js';
 
 type SlackEnvelope = { ok: boolean; error?: string; needed?: string; provided?: string };
 
@@ -27,6 +27,9 @@ type HistoryResponse = SlackEnvelope & {
 };
 type UserInfoResponse = SlackEnvelope & {
   user?: { id: string; real_name?: string; profile?: { display_name?: string; real_name?: string } };
+};
+type UserGroupsResponse = SlackEnvelope & {
+  usergroups?: { id: string; handle: string; name: string; date_delete?: number; users?: string[] }[];
 };
 
 /** Carries Slack's scope hints through, which is what you actually need to fix. */
@@ -87,6 +90,9 @@ function flatten(text: string, names: Map<string, string>): string {
     // Prefer a name Slack embedded in the markup, then a resolved name, then the id.
     .replace(/<@([A-Z0-9]+)(?:\|([^>]*))?>/g, (_m, id: string, label?: string) => `@${label?.trim() || names.get(id) || id}`)
     .replace(/<#[A-Z0-9]+\|([^>]*)>/g, (_m, name: string) => `#${name}`)
+    // Broadcast pings: <!here>, <!channel>, <!everyone>, and <!subteam^…|@group>.
+    .replace(/<!subteam\^[A-Z0-9]+(?:\|([^>]*))?>/g, (_m, handle?: string) => handle?.trim() || '@group')
+    .replace(/<!(here|channel|everyone)(?:\|[^>]*)?>/g, (_m, word: string) => `@${word}`)
     .replace(/<([^|>]+)\|([^>]+)>/g, (_m, _url: string, label: string) => label)
     .replace(/<([^|>]+)>/g, (_m, url: string) => url)
     // Known shortcodes become emoji; unrecognized ones (custom/team) pass through.
@@ -146,39 +152,83 @@ async function lastReadByChannel(channelIds: string[]): Promise<Map<string, stri
   return marks;
 }
 
-async function fetchMentions(me: AuthResponse): Promise<Item[]> {
-  const count = String(config.slack.mentionLimit);
-  const after = afterDate(MENTION_WINDOW_DAYS);
-
-  let result = await slack<SearchResponse>('search.messages', {
-    query: `<@${me.user_id}> after:${after}`,
+async function searchMentions(query: string, count: string): Promise<SlackMatch[]> {
+  const result = await slack<SearchResponse>('search.messages', {
+    query,
     sort: 'timestamp',
     sort_dir: 'desc',
     count,
   });
+  return result.messages?.matches ?? [];
+}
 
-  // Some workspaces index the rendered handle rather than the raw user id.
-  if (!result.messages?.matches?.length) {
-    result = await slack<SearchResponse>('search.messages', {
-      query: `@${me.user} after:${after}`,
-      sort: 'timestamp',
-      sort_dir: 'desc',
-      count,
+/**
+ * The user groups (@-aliases) the viewer belongs to. `include_users` returns
+ * membership in one call. Needs the `usergroups:read` scope — if it's missing we
+ * quietly return none so direct mentions still work.
+ */
+async function fetchMyUserGroups(me: AuthResponse): Promise<{ handle: string }[]> {
+  try {
+    const res = await slack<UserGroupsResponse>('usergroups.list', {
+      include_users: 'true',
+      include_disabled: 'false',
     });
+    return (res.usergroups ?? [])
+      .filter((g) => !g.date_delete && g.handle && (g.users ?? []).includes(me.user_id))
+      .map((g) => ({ handle: g.handle }));
+  } catch (error) {
+    if (error instanceof SlackApiError && error.code === 'missing_scope') return [];
+    throw error;
   }
+}
+
+/** One row per message, tracking whether it was a direct ping and which aliases matched. */
+type MentionHit = { match: SlackMatch; direct: boolean; aliases: Set<string> };
+
+function matchKey(m: SlackMatch): string {
+  return m.iid ?? `${m.channel?.id}-${m.ts}`;
+}
+
+async function fetchMentions(me: AuthResponse): Promise<Item[]> {
+  const count = String(config.slack.mentionLimit);
+  const after = afterDate(MENTION_WINDOW_DAYS);
+
+  // Direct pings: raw user-id token, falling back to the rendered handle.
+  let direct = await searchMentions(`<@${me.user_id}> after:${after}`, count);
+  if (!direct.length) direct = await searchMentions(`@${me.user} after:${after}`, count);
+
+  // Alias pings: one search per user group the viewer is in.
+  const groups = await fetchMyUserGroups(me);
+  const groupResults = await mapLimit(groups, 3, async (group) => ({
+    handle: group.handle,
+    matches: await searchMentions(`@${group.handle} after:${after}`, count),
+  }));
+
+  // Merge, deduping a message that matched several searches into one row.
+  const hits = new Map<string, MentionHit>();
+  const record = (m: SlackMatch, alias: string | null) => {
+    const key = matchKey(m);
+    const hit = hits.get(key) ?? { match: m, direct: false, aliases: new Set<string>() };
+    if (alias) hit.aliases.add(alias);
+    else hit.direct = true;
+    hits.set(key, hit);
+  };
+  for (const m of direct) record(m, null);
+  for (const group of groupResults) for (const m of group.matches) record(m, `@${group.handle}`);
 
   const cutoff = (Date.now() - MENTION_WINDOW_DAYS * 86_400_000) / 1000;
-  const matches = (result.messages?.matches ?? [])
-    .filter((m) => m.user !== me.user_id)
-    .filter((m) => Number.parseFloat(m.ts) >= cutoff);
+  const entries = [...hits.values()]
+    .filter((h) => h.match.user !== me.user_id)
+    .filter((h) => Number.parseFloat(h.match.ts) >= cutoff)
+    .sort((a, b) => Number.parseFloat(b.match.ts) - Number.parseFloat(a.match.ts));
 
-  const channelIds = [...new Set(matches.map((m) => m.channel?.id).filter(Boolean) as string[])];
+  const channelIds = [...new Set(entries.map((h) => h.match.channel?.id).filter(Boolean) as string[])];
   const [marks, names] = await Promise.all([
     lastReadByChannel(channelIds),
-    resolveUserNames(matches.flatMap((m) => mentionedUserIds(m.text ?? ''))),
+    resolveUserNames(entries.flatMap((h) => mentionedUserIds(h.match.text ?? ''))),
   ]);
 
-  return matches.map((match, index): Item => {
+  return entries.map(({ match, direct: isDirect, aliases }, index): Item => {
     const channel = match.channel?.name
       ? `#${match.channel.name}`
       : match.channel?.is_im
@@ -188,13 +238,18 @@ async function fetchMentions(me: AuthResponse): Promise<Item[]> {
     const lastRead = match.channel?.id ? marks.get(match.channel.id) : undefined;
     const unread = lastRead ? Number.parseFloat(match.ts) > Number.parseFloat(lastRead) : false;
 
+    const badges: Badge[] = [];
+    if (unread) badges.push({ label: 'Unread', tone: 'warn' });
+    // Show which alias caught it, unless it was also a direct ping to you.
+    if (!isDirect && aliases.size) badges.push({ label: [...aliases].join(', '), tone: 'neutral' });
+
     return {
-      id: `slack:mention:${match.iid ?? `${match.channel?.id}-${match.ts}`}`,
+      id: `slack:mention:${matchKey(match)}`,
       title: `${match.username ?? 'Someone'} in ${channel}`,
       url: match.permalink,
       // The channel is already in the title; repeating it just adds noise.
       excerpt: excerpt(flatten(match.text ?? '', names)),
-      badges: unread ? [{ label: 'Unread', tone: 'warn' }] : undefined,
+      badges: badges.length ? badges : undefined,
       timestamp: tsToIso(match.ts),
       // Unread float to the top; both groups stay newest-first within themselves.
       rank: (unread ? 0 : 1000) + index,

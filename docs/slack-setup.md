@@ -26,8 +26,8 @@ Slack shows a reason box. Something like:
 > MRs and calendar so I don't have to poll five tools every morning.
 >
 > It requests **user scopes only** — `search:read`, `im:read`, `im:history`,
-> `mpim:read`, `mpim:history`, `users:read` — so it can read exactly what I can
-> already read in the Slack client and nothing more. There is no bot user, no
+> `mpim:read`, `mpim:history`, `users:read`, `usergroups:read` — so it can read
+> exactly what I can already read in the Slack client and nothing more. There is no bot user, no
 > write scopes, and no event subscriptions: it cannot post, edit, delete or react
 > to anything, and nothing in the workspace can invoke it.
 >
