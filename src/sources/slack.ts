@@ -331,7 +331,8 @@ async function fetchUnreadDms(me: AuthResponse, groups: UserGroups): Promise<Ite
     return {
       id: `slack:dm:${entry.channel.id}`,
       title: who,
-      url: `slack://channel?team=${me.team}&id=${entry.channel.id}`,
+      // Deep-link to the specific message, not just the conversation.
+      url: `slack://channel?team=${me.team}&id=${entry.channel.id}&message=${entry.latest.ts}`,
       context: entry.count > 1 ? `${entry.count} unread` : '1 unread',
       excerpt: excerpt(flatten(entry.latest.text ?? '', names)),
       timestamp: tsToIso(entry.latest.ts),
@@ -410,7 +411,7 @@ export async function fetchWatchedChannels(): Promise<Section[]> {
         return {
           id: `slack:chan:${channel.id}:${message.ts}`,
           title: message.user ? (names.get(message.user) ?? message.user) : 'message',
-          url: `slack://channel?team=${me.team}&id=${channel.id}`,
+          url: `slack://channel?team=${me.team}&id=${channel.id}&message=${message.ts}`,
           excerpt: excerpt(flatten(message.text ?? '', names)),
           badges: unread ? [{ label: 'Unread', tone: 'info' }] : undefined,
           timestamp: tsToIso(message.ts),
