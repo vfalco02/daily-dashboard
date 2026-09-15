@@ -100,6 +100,9 @@ fix for whatever fails.
   re-hit every API.
 - The browser tab title carries the count of actionable items, so it reads as a
   badge when pinned.
+- **Show/hide a source** with its pill in the top bar — click to drop that
+  source's cards from the board (the pill dims); click again to bring them back.
+  Saved per-browser.
 - **Rearrange the cards** by dragging the grip (⠿) in any card header — within a
   column or across to another (empty columns appear as drop targets while you
   drag). The arrangement is saved per-browser in `localStorage`, so it sticks

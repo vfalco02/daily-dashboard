@@ -125,6 +125,36 @@ function saveCollapsed(set) {
 
 const collapsed = loadCollapsed();
 
+// ---- Show/hide sources (top-bar pills) --------------------------------------
+
+const HIDDEN_KEY = 'dashboard.hidden.v1';
+
+function loadHidden() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveHidden(set) {
+  try {
+    localStorage.setItem(HIDDEN_KEY, JSON.stringify([...set]));
+  } catch {
+    // Non-persistent storage — hiding still works for the session.
+  }
+}
+
+const hiddenSources = loadHidden();
+let lastBrief = null;
+
+function toggleSource(source) {
+  if (hiddenSources.has(source)) hiddenSources.delete(source);
+  else hiddenSources.add(source);
+  saveHidden(hiddenSources);
+  if (lastBrief) render(lastBrief);
+}
+
 /** Wire a header's chevron (and header clicks) to collapse/expand the card by key. */
 function attachCollapse(card, head, key) {
   const chevron = el('button', 'card__collapse', '▾');
@@ -372,11 +402,16 @@ function renderChips(sections) {
   }
 
   for (const [source, entry] of bySource) {
-    const chip = el('a', `chip${ALERT_SOURCES.has(source) && entry.count ? ' chip--alert' : ''}`);
+    const hidden = hiddenSources.has(source);
+    const alert = ALERT_SOURCES.has(source) && entry.count && !hidden;
+    const chip = el('button', `chip${hidden ? ' chip--off' : ''}${alert ? ' chip--alert' : ''}`);
+    chip.type = 'button';
     chip.dataset.source = source;
-    chip.href = `#section-${entry.anchor}`;
+    chip.setAttribute('aria-pressed', String(!hidden));
+    chip.title = hidden ? `Show ${SOURCE_LABELS[source] ?? source}` : `Hide ${SOURCE_LABELS[source] ?? source}`;
     chip.append(el('span', null, SOURCE_LABELS[source] ?? source));
     chip.append(el('span', 'chip__count', entry.issues ? '!' : String(entry.count)));
+    chip.addEventListener('click', () => toggleSource(source));
     chipsEl.append(chip);
   }
 }
@@ -394,12 +429,16 @@ function render(brief) {
   const typing = document.activeElement === reminderInput;
   const caret = typing ? [reminderInput.selectionStart, reminderInput.selectionEnd] : null;
 
+  lastBrief = brief;
   rowCaps = brief.rows || {};
 
   // Reminders is a draggable card like any other; it just uses the persistent node.
+  // Sources toggled off via the top-bar pills are left out of the board.
   const cards = [
     { key: 'reminders', source: 'reminders', el: ensureRemindersCard() },
-    ...brief.sections.map((section) => ({ key: section.key, source: section.source, el: renderSection(section) })),
+    ...brief.sections
+      .filter((section) => !hiddenSources.has(section.source))
+      .map((section) => ({ key: section.key, source: section.source, el: renderSection(section) })),
   ];
 
   board.replaceChildren();
