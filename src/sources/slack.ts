@@ -263,7 +263,8 @@ async function fetchMentions(me: AuthResponse, groups: UserGroups): Promise<{ di
     const unread = lastRead ? Number.parseFloat(match.ts) > Number.parseFloat(lastRead) : false;
 
     const badges: Badge[] = [];
-    if (unread) badges.push({ label: 'Unread', tone: 'warn' });
+    // Unread reads as a status pill (like a Linear state), not by dimming the rest.
+    if (unread) badges.push({ label: 'Unread', tone: 'info' });
     if (showAlias && aliases.size) badges.push({ label: [...aliases].join(', '), tone: 'neutral' });
 
     return {
@@ -276,7 +277,8 @@ async function fetchMentions(me: AuthResponse, groups: UserGroups): Promise<{ di
       timestamp: tsToIso(match.ts),
       // Unread float to the top; both groups stay newest-first within themselves.
       rank: (unread ? 0 : 1000) + index,
-      tone: unread ? 'warn' : 'muted',
+      // Read items are full-opacity neutral; unread get a blue edge marker.
+      tone: unread ? 'info' : 'neutral',
     };
   };
 

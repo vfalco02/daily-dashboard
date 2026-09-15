@@ -23,7 +23,7 @@ export type Item = {
   excerpt?: string;
 };
 
-export type Tone = 'urgent' | 'warn' | 'ok' | 'muted' | 'neutral';
+export type Tone = 'urgent' | 'warn' | 'ok' | 'info' | 'muted' | 'neutral';
 
 export type Badge = {
   label: string;
