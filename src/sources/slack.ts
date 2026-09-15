@@ -31,6 +31,10 @@ type UserInfoResponse = SlackEnvelope & {
 type UserGroupsResponse = SlackEnvelope & {
   usergroups?: { id: string; handle: string; name: string; date_delete?: number; users?: string[] }[];
 };
+type ChannelListResponse = SlackEnvelope & {
+  channels?: { id: string; name?: string }[];
+  response_metadata?: { next_cursor?: string };
+};
 
 /** Carries Slack's scope hints through, which is what you actually need to fix. */
 export class SlackApiError extends Error {
@@ -352,6 +356,80 @@ async function fetchUnreadDms(me: AuthResponse, groups: UserGroups): Promise<Ite
       rank: -entry.count,
       tone: 'warn',
     };
+  });
+}
+
+const CHANNEL_ID = /^[CGD][A-Z0-9]+$/;
+
+/** Map channel name (lowercased, no #) → id, for the channels the viewer is in. */
+async function channelNameIndex(): Promise<Map<string, string>> {
+  const index = new Map<string, string>();
+  let cursor = '';
+  do {
+    const params: Record<string, string> = {
+      types: 'public_channel,private_channel',
+      exclude_archived: 'true',
+      limit: '200',
+    };
+    if (cursor) params.cursor = cursor;
+    const list = await slack<ChannelListResponse>('users.conversations', params);
+    for (const channel of list.channels ?? []) {
+      if (channel.name) index.set(channel.name.toLowerCase(), channel.id);
+    }
+    cursor = list.response_metadata?.next_cursor ?? '';
+  } while (cursor);
+  return index;
+}
+
+/**
+ * Opt-in "watch channels" widget: one card per configured channel showing its
+ * recent messages. Returns nothing (no cards, no pill) until channels are set.
+ */
+export async function fetchWatchedChannels(): Promise<Section[]> {
+  const wanted = (config.slack.watchChannels ?? '')
+    .split(',')
+    .map((s) => s.trim().replace(/^#/, ''))
+    .filter(Boolean);
+  if (!config.slack.userToken || wanted.length === 0) return [];
+
+  const me = await slack<AuthResponse>('auth.test', {});
+  const limit = String(config.slack.channelLimit);
+
+  // Resolve any names to ids (ids pass through); one channel listing covers all.
+  const index = wanted.some((w) => !CHANNEL_ID.test(w)) ? await channelNameIndex() : new Map<string, string>();
+  const resolved = wanted.map((w) => ({
+    name: w,
+    id: CHANNEL_ID.test(w) ? w : index.get(w.toLowerCase()),
+  }));
+
+  return mapLimit(resolved, 3, async (channel): Promise<Section> => {
+    const section: Section = {
+      key: `slack-channel-${channel.name}`,
+      label: `#${channel.name}`,
+      source: 'channels',
+      items: [],
+      emptyLabel: 'No recent messages.',
+    };
+    if (!channel.id) {
+      return { ...section, error: `Channel #${channel.name} not found — are you a member?` };
+    }
+    try {
+      const history = await slack<HistoryResponse>('conversations.history', { channel: channel.id, limit });
+      const messages = (history.messages ?? []).filter((m) => !m.subtype);
+      const names = await resolveUserNames(messages.flatMap((m) => [m.user, ...mentionedUserIds(m.text ?? '')].filter(Boolean) as string[]));
+      section.items = messages.map((message, index_): Item => ({
+        id: `slack:chan:${channel.id}:${message.ts}`,
+        title: message.user ? (names.get(message.user) ?? message.user) : 'message',
+        url: `slack://channel?team=${me.team}&id=${channel.id}`,
+        excerpt: excerpt(flatten(message.text ?? '', names)),
+        timestamp: tsToIso(message.ts),
+        rank: index_,
+        tone: 'neutral',
+      }));
+      return section;
+    } catch (error) {
+      return { ...section, error: error instanceof Error ? error.message : String(error) };
+    }
   });
 }
 

@@ -18,7 +18,7 @@ export function demoBrief(): Brief {
   return {
     generatedAt: new Date().toISOString(),
     durationMs: 0,
-    rows: { linear: 0, gitlab: 0, slack: 5, calendar: 0, reminders: 0 },
+    rows: { linear: 0, gitlab: 0, slack: 5, calendar: 0, channels: 8, reminders: 0 },
     refreshSeconds: 120,
     sections: [
       {
@@ -178,6 +178,27 @@ export function demoBrief(): Brief {
             timestamp: at(-900),
             rank: 100,
             tone: 'muted',
+          },
+        ],
+      },
+      {
+        key: 'slack-channel-engineering',
+        label: '#engineering',
+        source: 'channels',
+        items: [
+          {
+            id: 'ch1',
+            title: 'Dana Whitfield',
+            excerpt: 'Deploy is green — 2026.34 is out. Thanks all.',
+            timestamp: at(-12),
+            rank: 0,
+          },
+          {
+            id: 'ch2',
+            title: 'Rui Almeida',
+            excerpt: 'Heads up: bumping the ingest workers to 8 for the backfill.',
+            timestamp: at(-70),
+            rank: 1,
           },
         ],
       },

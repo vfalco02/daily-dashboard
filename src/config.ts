@@ -95,6 +95,14 @@ export const config = {
     get dmScanLimit() {
       return int('SLACK_DM_SCAN_LIMIT', 25);
     },
+    /** Comma-separated channels to watch (opt-in Channels widget). */
+    get watchChannels() {
+      return str('SLACK_WATCH_CHANNELS');
+    },
+    /** Messages fetched per watched channel. */
+    get channelLimit() {
+      return int('SLACK_CHANNEL_LIMIT', 10);
+    },
   },
   calendar: {
     get icsUrl() {
@@ -118,6 +126,9 @@ export const config = {
     },
     get calendar() {
       return int('ROWS_CALENDAR', 0);
+    },
+    get channels() {
+      return int('ROWS_CHANNELS', 8);
     },
     get reminders() {
       return int('ROWS_REMINDERS', 0);

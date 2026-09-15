@@ -43,6 +43,11 @@ oauth_config:
       - users:read
       # Find which @-alias (user group) mentions apply to me.
       - usergroups:read
+      # Optional "watch channels" widget: read recent messages from chosen channels.
+      - channels:read
+      - channels:history
+      - groups:read
+      - groups:history
 
 settings:
   org_deploy_enabled: false

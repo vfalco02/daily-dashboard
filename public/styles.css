@@ -21,6 +21,7 @@
   --src-gitlab: #e2620b;
   --src-slack: #d81b60;
   --src-reminders: #0d9488;
+  --src-channels: #0891b2;
   --src-default: #7a8496;
 
   --urgent-bg: #fdecec;
@@ -58,6 +59,7 @@
     --src-gitlab: #ff8a4c;
     --src-slack: #f472a0;
     --src-reminders: #2dd4bf;
+    --src-channels: #38bdf8;
     --src-default: #97a1b3;
 
     --urgent-bg: #35191a;
@@ -328,6 +330,7 @@ body {
 [data-source='gitlab'] { --source-color: var(--src-gitlab); }
 [data-source='slack'] { --source-color: var(--src-slack); }
 [data-source='reminders'] { --source-color: var(--src-reminders); }
+[data-source='channels'] { --source-color: var(--src-channels); }
 
 .card__head {
   display: flex;

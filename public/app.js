@@ -38,6 +38,7 @@ const SOURCE_LABELS = {
   reminders: 'Reminders',
   calendar: 'Calendar',
   slack: 'Slack',
+  channels: 'Channels',
   linear: 'Linear',
   gitlab: 'GitLab',
 };
@@ -52,7 +53,7 @@ const ALERT_SOURCES = new Set(['slack']);
  */
 const COLUMN_GROUPS = [
   { key: 'day', sources: ['calendar', 'linear'] },
-  { key: 'slack', sources: ['slack'] },
+  { key: 'slack', sources: ['slack', 'channels'] },
   { key: 'gitlab', sources: ['gitlab'] },
 ];
 
@@ -754,7 +755,7 @@ const REFRESH_OPTIONS = [
   ['120', '2 minutes'],
 ];
 
-const TESTABLE = new Set(['linear', 'gitlab', 'slack', 'calendar']);
+const TESTABLE = new Set(['linear', 'gitlab', 'slack', 'calendar', 'channels']);
 
 function renderSettingsModal(fields) {
   const overlay = el('div', 'modal-overlay');

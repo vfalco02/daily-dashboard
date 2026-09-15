@@ -69,6 +69,7 @@ which pins these read-only scopes:
 | `mpim:read`, `mpim:history` | unread group DMs |
 | `users:read` | names on those DMs |
 | `usergroups:read` | mentions of @-aliases (user groups) you're in |
+| `channels:*`, `groups:*` | the optional Channels widget (read/history) |
 
 Two ways to get the token into the app:
 - **Connect with Slack** (recommended) — paste the app's Client ID and Secret into
@@ -105,6 +106,10 @@ fix for whatever fails.
 - **Show/hide a widget** with its pill in the top bar — one per source plus
   Reminders. Click to drop that widget's cards from the board (the pill dims);
   click again to bring them back. Saved per-browser.
+- **Watch specific channels** (optional, off by default): in ⚙ Settings → Channels,
+  list channels to follow (e.g. `#engineering, #incidents`) and each gets a card of
+  recent messages. This needs the extra `channels:*`/`groups:*` scopes, so
+  reconnect Slack after enabling it.
 - **Rearrange the cards** by dragging the grip (⠿) in any card header — within a
   column or across to another (empty columns appear as drop targets while you
   drag). The arrangement is saved per-browser in `localStorage`, so it sticks

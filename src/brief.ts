@@ -3,7 +3,7 @@ import { errorMessage } from './http.js';
 import { fetchCalendar } from './sources/calendar.js';
 import { fetchGitlab } from './sources/gitlab.js';
 import { fetchLinear } from './sources/linear.js';
-import { fetchSlack } from './sources/slack.js';
+import { fetchSlack, fetchWatchedChannels } from './sources/slack.js';
 import type { Brief, Item, Section, SourceKey } from './types.js';
 
 type Loader = {
@@ -25,6 +25,8 @@ const LOADERS: Loader[] = [
       { key: 'gitlab-authored', label: 'GitLab · your open MRs' },
     ],
   },
+  // Opt-in: yields nothing until channels are configured, so no card by default.
+  { source: 'channels', load: fetchWatchedChannels, fallback: [{ key: 'slack-channels', label: 'Channels' }] },
 ];
 
 function sortItems(items: Item[]): Item[] {
@@ -68,6 +70,7 @@ export async function buildBrief(): Promise<Brief> {
       gitlab: config.rows.gitlab,
       slack: config.rows.slack,
       calendar: config.rows.calendar,
+      channels: config.rows.channels,
       reminders: config.rows.reminders,
     },
     refreshSeconds: config.refreshSeconds,

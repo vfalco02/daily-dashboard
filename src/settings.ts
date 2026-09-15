@@ -77,6 +77,11 @@ export const SLACK_USER_SCOPES = [
   'mpim:history',
   'users:read',
   'usergroups:read',
+  // For the optional "watch channels" widget (public + private channel history).
+  'channels:read',
+  'channels:history',
+  'groups:read',
+  'groups:history',
 ];
 
 /** The editable settings surfaced in the in-app configuration screen. */
@@ -143,6 +148,14 @@ export const SETTINGS_FIELDS: SettingField[] = [
     help: 'Lets the dashboard hide invitations you declined.',
   },
   rowsField('Calendar', 'ROWS_CALENDAR', '0'),
+  {
+    key: 'SLACK_WATCH_CHANNELS',
+    integration: 'Channels',
+    label: 'Channels to watch',
+    secret: false,
+    help: 'Comma-separated, e.g. #engineering, #incidents (names or IDs). Off until set. Needs Slack connected with channel scopes — reconnect Slack after adding this.',
+  },
+  rowsField('Channels', 'ROWS_CHANNELS', '8'),
   rowsField('Reminders', 'ROWS_REMINDERS', '0'),
   {
     key: 'REFRESH_SECONDS',

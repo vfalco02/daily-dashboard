@@ -10,7 +10,7 @@ import { allSettings, SETTINGS_FIELDS, SLACK_USER_SCOPES, updateSettings } from 
 import { fetchCalendar } from './sources/calendar.js';
 import { fetchGitlab } from './sources/gitlab.js';
 import { fetchLinear } from './sources/linear.js';
-import { fetchSlack } from './sources/slack.js';
+import { fetchSlack, fetchWatchedChannels } from './sources/slack.js';
 import type { Section } from './types.js';
 
 /** DEMO=1 serves sample data so you can see the layout before wiring tokens. */
@@ -118,6 +118,7 @@ const SOURCE_LOADERS: Record<string, () => Promise<Section[]>> = {
   gitlab: fetchGitlab,
   slack: fetchSlack,
   calendar: fetchCalendar,
+  channels: fetchWatchedChannels,
 };
 
 /** Run one source's real fetch and report whether it connected. */

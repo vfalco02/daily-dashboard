@@ -46,7 +46,7 @@ export type Section = {
   maxVisible?: number;
 };
 
-export type SourceKey = 'linear' | 'gitlab' | 'slack' | 'calendar';
+export type SourceKey = 'linear' | 'gitlab' | 'slack' | 'calendar' | 'channels';
 
 export type Brief = {
   generatedAt: string;
