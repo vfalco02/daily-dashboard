@@ -6,7 +6,7 @@ import { config, projectRoot } from './config.js';
 import { getBrief } from './brief.js';
 import { demoBrief } from './demo.js';
 import { addReminder, deleteReminder, listReminders, updateReminder } from './reminders.js';
-import { allSettings, SETTINGS_FIELDS, updateSettings } from './settings.js';
+import { allSettings, SETTINGS_FIELDS, SLACK_USER_SCOPES, updateSettings } from './settings.js';
 
 /** DEMO=1 serves sample data so you can see the layout before wiring tokens. */
 const demoMode = process.env.DEMO === '1';
@@ -130,6 +130,107 @@ async function handleSettings(req: IncomingMessage, res: ServerResponse, pathnam
   return false;
 }
 
+// ---- Slack OAuth ("Connect with Slack") ------------------------------------
+
+// state -> expiry, to guard the callback against forged/replayed requests.
+const slackStates = new Map<string, number>();
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string);
+}
+
+/** Redirect URL must match the one registered in the Slack app; adapts to the host/port in use. */
+function slackRedirectUri(req: IncomingMessage): string {
+  if (config.slack.redirectUrl) return config.slack.redirectUrl;
+  const host = req.headers.host ?? `localhost:${config.port}`;
+  return `http://${host}/slack/oauth/callback`;
+}
+
+function sendHtml(res: ServerResponse, status: number, title: string, message: string, redirectTo?: string): void {
+  const redirect = redirectTo
+    ? `<script>setTimeout(function(){location.href=${JSON.stringify(redirectTo)}},1400)</script>`
+    : '';
+  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(
+    `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
+      `<title>${escapeHtml(title)}</title>` +
+      `<div style="font:15px/1.5 -apple-system,system-ui,sans-serif;max-width:420px;margin:18vh auto;padding:0 24px;text-align:center;color:#16181d">` +
+      `<h1 style="font-size:18px">${escapeHtml(title)}</h1><p style="color:#626976">${escapeHtml(message)}</p>` +
+      `<p><a href="/">Back to the dashboard</a></p></div>${redirect}`,
+  );
+}
+
+async function handleSlackOauth(req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> {
+  if (url.pathname === '/slack/install') {
+    if (!config.slack.clientId) {
+      sendHtml(res, 400, 'Slack not configured', 'Add the Slack Client ID and secret in Settings first.', '/');
+      return true;
+    }
+    // Prune expired states, then issue a fresh one for this attempt.
+    const now = Date.now();
+    for (const [value, expiry] of slackStates) if (expiry < now) slackStates.delete(value);
+    const state = globalThis.crypto.randomUUID();
+    slackStates.set(state, now + 10 * 60_000);
+
+    const authorize = new URL('https://slack.com/oauth/v2/authorize');
+    authorize.searchParams.set('client_id', config.slack.clientId);
+    authorize.searchParams.set('user_scope', SLACK_USER_SCOPES.join(','));
+    authorize.searchParams.set('redirect_uri', slackRedirectUri(req));
+    authorize.searchParams.set('state', state);
+    res.writeHead(302, { Location: authorize.toString() });
+    res.end();
+    return true;
+  }
+
+  if (url.pathname === '/slack/oauth/callback') {
+    const error = url.searchParams.get('error');
+    if (error) {
+      sendHtml(res, 400, 'Slack', `Authorization was cancelled or failed: ${error}`, '/');
+      return true;
+    }
+    const code = url.searchParams.get('code');
+    const state = url.searchParams.get('state');
+    if (!state || !slackStates.has(state)) {
+      sendHtml(res, 400, 'Slack', 'This sign-in link expired or was invalid. Please try connecting again.', '/');
+      return true;
+    }
+    slackStates.delete(state);
+    if (!code) {
+      sendHtml(res, 400, 'Slack', 'Missing authorization code from Slack.', '/');
+      return true;
+    }
+
+    try {
+      const body = new URLSearchParams({
+        client_id: config.slack.clientId ?? '',
+        client_secret: config.slack.clientSecret ?? '',
+        code,
+        redirect_uri: slackRedirectUri(req),
+      });
+      const response = await fetch('https://slack.com/api/oauth.v2.access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+        signal: AbortSignal.timeout(15_000),
+      });
+      const data = (await response.json()) as {
+        ok: boolean;
+        error?: string;
+        authed_user?: { access_token?: string };
+      };
+      const token = data.authed_user?.access_token;
+      if (!data.ok || !token) throw new Error(data.error ?? 'Slack did not return a user token');
+      updateSettings({ SLACK_USER_TOKEN: token });
+      sendHtml(res, 200, 'Slack connected', 'Slack is connected. Returning to your dashboard…', '/?slack=connected');
+    } catch (err) {
+      sendHtml(res, 400, 'Slack', `Could not complete the connection: ${err instanceof Error ? err.message : String(err)}`, '/');
+    }
+    return true;
+  }
+
+  return false;
+}
+
 async function serveStatic(pathname: string): Promise<{ body: Buffer; type: string } | null> {
   const relative = pathname === '/' ? 'index.html' : normalize(pathname).replace(/^(\.\.[/\\])+/, '').slice(1);
   const filePath = join(publicDir, relative);
@@ -163,6 +264,7 @@ const server = createServer(async (req, res) => {
   }
 
   try {
+    if (await handleSlackOauth(req, res, url)) return;
     if (await handleSettings(req, res, url.pathname)) return;
     if (await handleReminders(req, res, url.pathname)) return;
   } catch (error) {

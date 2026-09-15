@@ -655,6 +655,10 @@ body {
   font-size: 11.5px;
 }
 
+.settings-connect {
+  margin-top: 4px;
+}
+
 .modal__foot {
   display: flex;
   align-items: center;

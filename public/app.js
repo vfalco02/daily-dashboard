@@ -705,6 +705,24 @@ function renderSettingsModal(fields) {
       group.append(row);
       controls.push({ field, input, clear });
     }
+
+    // Slack gets a one-click OAuth button that fills the user token for you.
+    if (integration === 'Slack') {
+      const hasApp = groupFields.some((f) => f.key === 'SLACK_CLIENT_ID' && f.configured)
+        && groupFields.some((f) => f.key === 'SLACK_CLIENT_SECRET' && f.configured);
+      const connect = el('button', 'button button--primary settings-connect', 'Connect with Slack');
+      connect.type = 'button';
+      if (!hasApp) {
+        connect.disabled = true;
+        connect.title = 'Add the Client ID and secret above (Save first), then connect.';
+      }
+      connect.addEventListener('click', () => {
+        window.location.href = '/slack/install';
+      });
+      group.append(connect);
+      group.append(el('span', 'settings-field__help', 'Register redirect URL http://localhost:4300/slack/oauth/callback in your Slack app.'));
+    }
+
     body.append(group);
   }
   panel.append(body);
@@ -784,6 +802,12 @@ dateEl.textContent = new Date().toLocaleDateString(undefined, {
 
 settingsButton.addEventListener('click', openSettings);
 refreshButton.addEventListener('click', () => load({ force: true }));
+
+// Returning from the Slack OAuth flow: confirm and drop the query param.
+if (new URLSearchParams(location.search).get('slack') === 'connected') {
+  setStatus('Slack connected');
+  history.replaceState(null, '', location.pathname);
+}
 
 document.addEventListener('keydown', (event) => {
   if (event.metaKey || event.ctrlKey || event.altKey) return;

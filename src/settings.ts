@@ -52,6 +52,18 @@ export type SettingField = {
   default?: string;
 };
 
+/** User-token scopes the dashboard needs — the single source of truth for the
+ *  OAuth flow, the app manifest, and the docs. */
+export const SLACK_USER_SCOPES = [
+  'search:read',
+  'im:read',
+  'im:history',
+  'mpim:read',
+  'mpim:history',
+  'users:read',
+  'usergroups:read',
+];
+
 /** The editable settings surfaced in the in-app configuration screen. */
 export const SETTINGS_FIELDS: SettingField[] = [
   {
@@ -78,11 +90,25 @@ export const SETTINGS_FIELDS: SettingField[] = [
     help: 'Defaults to https://gitlab.com — only change for a self-managed instance.',
   },
   {
+    key: 'SLACK_CLIENT_ID',
+    integration: 'Slack',
+    label: 'Client ID',
+    secret: false,
+    help: 'Slack app → Basic Information → App Credentials. Needed for "Connect with Slack".',
+  },
+  {
+    key: 'SLACK_CLIENT_SECRET',
+    integration: 'Slack',
+    label: 'Client secret',
+    secret: true,
+    help: 'Slack app → Basic Information → App Credentials.',
+  },
+  {
     key: 'SLACK_USER_TOKEN',
     integration: 'Slack',
     label: 'User token (xoxp-…)',
     secret: true,
-    help: 'A user token, not a bot token. See docs/slack-setup.md.',
+    help: 'Filled automatically by "Connect with Slack", or paste one manually.',
   },
   {
     key: 'GOOGLE_CALENDAR_ICS_URL',

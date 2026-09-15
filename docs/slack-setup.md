@@ -39,10 +39,32 @@ Two details worth keeping if you rewrite it: **user scopes only, no write
 access** is the thing that makes this a low-risk approval, and **revocable from
 the admin console** is the thing that makes it an easy yes.
 
-## 3. Once approved
+## 3. Once approved — get the token
+
+Two ways; both end with a `xoxp-` user token the dashboard uses.
+
+### A. Connect from the app (recommended)
+
+The manifest already registers the redirect URL
+`http://localhost:4300/slack/oauth/callback`, so OAuth works out of the box:
+
+1. In the Slack app, open **Basic Information → App Credentials** and copy the
+   **Client ID** and **Client Secret**.
+2. In the dashboard, open **⚙ Settings → Slack**, paste both, and **Save**.
+3. Reopen Settings and click **Connect with Slack**. Approve the consent screen;
+   Slack sends you back and the user token is stored automatically.
+
+The token never has to be copied by hand, and the same flow works for a teammate
+on their own machine (each person authorizes and gets their own token from the
+one shared app). If you run the dashboard on a different port, register a matching
+redirect URL and set `SLACK_REDIRECT_URL`.
+
+### B. Paste a token manually
 
 Copy the **User OAuth Token** (starts with `xoxp-`) from **OAuth & Permissions**
-into `SLACK_USER_TOKEN` in `.env`, then:
+into **⚙ Settings → Slack → User token** (or `SLACK_USER_TOKEN` in `.env`).
+
+Either way, verify with:
 
 ```bash
 npm run doctor

@@ -24,6 +24,11 @@ display_information:
   background_color: "#1f2933"
 
 oauth_config:
+  # For the in-app "Connect with Slack" button. Change the port if you run the
+  # dashboard elsewhere; it must match SLACK_REDIRECT_URL (or the default).
+  redirect_urls:
+    - http://localhost:4300/slack/oauth/callback
+    - http://127.0.0.1:4300/slack/oauth/callback
   scopes:
     user:
       # Find messages that @-mention me.

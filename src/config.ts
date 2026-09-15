@@ -72,6 +72,17 @@ export const config = {
     get userToken() {
       return str('SLACK_USER_TOKEN');
     },
+    /** App credentials for the OAuth "Connect with Slack" flow. */
+    get clientId() {
+      return str('SLACK_CLIENT_ID');
+    },
+    get clientSecret() {
+      return str('SLACK_CLIENT_SECRET');
+    },
+    /** Override only if you registered a different redirect URL (e.g. a tunnel). */
+    get redirectUrl() {
+      return str('SLACK_REDIRECT_URL');
+    },
     /** How many recent mentions to pull. */
     get mentionLimit() {
       return int('SLACK_MENTION_LIMIT', 20);
