@@ -106,10 +106,10 @@ fix for whatever fails.
 - **Show/hide a widget** with its pill in the top bar — one per source plus
   Reminders. Click to drop that widget's cards from the board (the pill dims);
   click again to bring them back. Saved per-browser.
-- **Watch specific channels** (optional, off by default): in ⚙ Settings → Channels,
-  list channels to follow (e.g. `#engineering, #incidents`) and each gets a card of
-  recent messages. This needs the extra `channels:*`/`groups:*` scopes, so
-  reconnect Slack after enabling it.
+- **Watch specific channels** (optional, off by default): in ⚙ Settings → Slack →
+  Watch channels, list channels to follow (e.g. `#engineering, #incidents`) and each
+  gets a card of recent messages (shown under a Channels pill). This needs the extra
+  `channels:*`/`groups:*` scopes, so reconnect Slack after enabling it.
 - **Rearrange the cards** by dragging the grip (⠿) in any card header — within a
   column or across to another (empty columns appear as drop targets while you
   drag). The arrangement is saved per-browser in `localStorage`, so it sticks

@@ -134,6 +134,22 @@ export const SETTINGS_FIELDS: SettingField[] = [
   },
   rowsField('Slack', 'ROWS_SLACK', '5'),
   {
+    key: 'SLACK_WATCH_CHANNELS',
+    integration: 'Slack',
+    label: 'Watch channels (optional)',
+    secret: false,
+    help: 'Comma-separated, e.g. #engineering, #incidents (names or IDs). Off until set. Each becomes its own card. Needs channel scopes — reconnect Slack after adding.',
+  },
+  {
+    key: 'ROWS_CHANNELS',
+    integration: 'Slack',
+    label: 'Channel rows before scroll',
+    secret: false,
+    number: true,
+    default: '8',
+    help: '0 shows all rows; otherwise each channel card caps here and scrolls.',
+  },
+  {
     key: 'GOOGLE_CALENDAR_ICS_URL',
     integration: 'Calendar',
     label: 'Secret iCal URL',
@@ -148,14 +164,6 @@ export const SETTINGS_FIELDS: SettingField[] = [
     help: 'Lets the dashboard hide invitations you declined.',
   },
   rowsField('Calendar', 'ROWS_CALENDAR', '0'),
-  {
-    key: 'SLACK_WATCH_CHANNELS',
-    integration: 'Channels',
-    label: 'Channels to watch',
-    secret: false,
-    help: 'Comma-separated, e.g. #engineering, #incidents (names or IDs). Off until set. Needs Slack connected with channel scopes — reconnect Slack after adding this.',
-  },
-  rowsField('Channels', 'ROWS_CHANNELS', '8'),
   rowsField('Reminders', 'ROWS_REMINDERS', '0'),
   {
     key: 'REFRESH_SECONDS',
