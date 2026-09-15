@@ -95,8 +95,9 @@ fix for whatever fails.
 ## Using it
 
 - `r` or the Refresh button forces a fresh fetch.
-- The page auto-refreshes every 2 minutes (adjustable in ⚙ Settings → General →
-  Auto-refresh; 0 turns it off), and again whenever you return to the tab.
+- The page auto-refreshes every 2 minutes (change it with the Auto-refresh dropdown
+  at the top of ⚙ Settings — Off / 15s / 30s / 1m / 2m), and again whenever you
+  return to the tab.
 - Responses are cached for `CACHE_TTL_SECONDS` (default 90) so a reload does not
   re-hit every API.
 - The browser tab title carries the count of actionable items, so it reads as a

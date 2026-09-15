@@ -584,16 +584,75 @@ body {
 }
 
 .modal__body {
-  padding: 8px 20px;
+  padding: 8px 20px 16px;
 }
 
-.settings-group {
-  padding: 16px 0;
+/* Auto-refresh row, pinned above the tabs. */
+.settings-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--border);
 }
 
-.settings-group:last-child {
-  border-bottom: none;
+.settings-topbar__label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.settings-select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* One tab per integration. */
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 10px 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.settings-tab:hover {
+  color: var(--text);
+}
+
+.settings-tab.is-active {
+  color: var(--text);
+  border-bottom-color: var(--source-color, var(--accent));
+}
+
+.settings-tab__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--source-color, var(--src-default));
+}
+
+.settings-group {
+  padding: 12px 0 4px;
 }
 
 .settings-group__head {

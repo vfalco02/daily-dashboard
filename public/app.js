@@ -746,12 +746,22 @@ function groupByIntegration(fields) {
   return groups;
 }
 
+const REFRESH_OPTIONS = [
+  ['0', 'Off'],
+  ['15', '15 seconds'],
+  ['30', '30 seconds'],
+  ['60', '1 minute'],
+  ['120', '2 minutes'],
+];
+
+const TESTABLE = new Set(['linear', 'gitlab', 'slack', 'calendar']);
+
 function renderSettingsModal(fields) {
   const overlay = el('div', 'modal-overlay');
   const panel = el('div', 'modal');
   panel.setAttribute('role', 'dialog');
   panel.setAttribute('aria-modal', 'true');
-  panel.setAttribute('aria-label', 'Integration settings');
+  panel.setAttribute('aria-label', 'Settings');
 
   const head = el('div', 'modal__head');
   head.append(el('h2', 'modal__title', 'Settings'));
@@ -761,28 +771,53 @@ function renderSettingsModal(fields) {
   head.append(closeBtn);
   panel.append(head);
 
-  const body = el('div', 'modal__body');
-  const controls = []; // { field, input, clear }
-
+  const controls = []; // { field, input, clear } across all tabs
   let dirty = false; // whether anything was saved, so we refresh the board on close
-  const testable = new Set(['linear', 'gitlab', 'slack', 'calendar']);
 
-  for (const [integration, groupFields] of groupByIntegration(fields)) {
+  // --- Top: auto-refresh dropdown (global, not a tab) ---
+  const refreshField = fields.find((f) => f.key === 'REFRESH_SECONDS');
+  const topbar = el('div', 'settings-topbar');
+  topbar.append(el('label', 'settings-topbar__label', 'Auto-refresh'));
+  const refreshSelect = el('select', 'settings-select');
+  for (const [value, label] of REFRESH_OPTIONS) {
+    const option = el('option', null, label);
+    option.value = value;
+    refreshSelect.append(option);
+  }
+  const currentRefresh = refreshField?.value ?? '120';
+  refreshSelect.value = REFRESH_OPTIONS.some(([v]) => v === currentRefresh) ? currentRefresh : '120';
+  refreshSelect.addEventListener('change', async () => {
+    const value = refreshSelect.value;
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ REFRESH_SECONDS: value }),
+      });
+      if (refreshField) refreshField.value = value;
+      applyRefreshInterval(Number(value)); // take effect immediately
+      dirty = true;
+    } catch {
+      // Left unsaved; Done will retry via collectPatch is not applicable here.
+    }
+  });
+  topbar.append(refreshSelect);
+  panel.append(topbar);
+
+  // Build one panel section per integration.
+  function buildGroup(integration, groupFields) {
     const source = integration.toLowerCase();
     const group = el('section', 'settings-group');
     group.dataset.source = source;
 
-    const heading = el('div', 'settings-group__head');
-    heading.append(el('span', 'settings-group__dot'));
-    heading.append(el('h3', 'settings-group__title', integration));
-    // The Connected/Not set pill only makes sense where there's a credential.
     let pill = null;
     if (groupFields.some((f) => f.secret)) {
       const on = groupFields.some((f) => f.secret && f.configured);
       pill = el('span', `settings-group__state${on ? ' is-on' : ''}`, on ? 'Connected' : 'Not set');
-      heading.append(pill);
+      const heading = el('div', 'settings-group__head');
+      heading.append(el('span', 'settings-group__dot'), el('h3', 'settings-group__title', integration), pill);
+      group.append(heading);
     }
-    group.append(heading);
 
     const groupControls = [];
     for (const field of groupFields) {
@@ -808,7 +843,6 @@ function renderSettingsModal(fields) {
       row.append(input);
 
       let clear = null;
-      // Only settings-stored secrets can be cleared from here (.env is on disk).
       if (field.secret && field.source === 'settings') {
         const clearLabel = el('label', 'settings-field__clear');
         clear = el('input');
@@ -824,7 +858,6 @@ function renderSettingsModal(fields) {
       controls.push(control);
     }
 
-    // Per-integration actions: a status line and a Save button that also tests.
     const actions = el('div', 'settings-actions');
     const status = el('span', 'settings-status');
 
@@ -843,7 +876,7 @@ function renderSettingsModal(fields) {
       actions.append(oauth);
     }
 
-    const saveBtn = el('button', 'button button--primary', testable.has(source) ? 'Save & test' : 'Save');
+    const saveBtn = el('button', 'button button--primary', TESTABLE.has(source) ? 'Save & test' : 'Save');
     saveBtn.type = 'button';
     actions.append(saveBtn, status);
     group.append(actions);
@@ -863,7 +896,7 @@ function renderSettingsModal(fields) {
           if (!response.ok) throw new Error(`save failed (${response.status})`);
         }
         dirty = true;
-        if (testable.has(source)) {
+        if (TESTABLE.has(source)) {
           status.textContent = 'Testing…';
           const result = await fetch(`/api/test/${source}`).then((r) => r.json());
           if (result.ok) {
@@ -892,9 +925,41 @@ function renderSettingsModal(fields) {
       }
     });
 
-    body.append(group);
+    return group;
   }
-  panel.append(body);
+
+  // --- Tabs: one per integration ---
+  const tabBar = el('div', 'settings-tabs');
+  tabBar.setAttribute('role', 'tablist');
+  const panels = el('div', 'modal__body');
+  const tabs = [];
+
+  const integrationFields = fields.filter((f) => f.key !== 'REFRESH_SECONDS');
+  let first = true;
+  for (const [integration, groupFields] of groupByIntegration(integrationFields)) {
+    const groupEl = buildGroup(integration, groupFields);
+    groupEl.hidden = !first;
+    panels.append(groupEl);
+
+    const tab = el('button', `settings-tab${first ? ' is-active' : ''}`);
+    tab.type = 'button';
+    tab.dataset.source = integration.toLowerCase();
+    tab.append(el('span', 'settings-tab__dot'), document.createTextNode(integration));
+    tabBar.append(tab);
+
+    tabs.push({ tab, panel: groupEl });
+    first = false;
+  }
+  for (const entry of tabs) {
+    entry.tab.addEventListener('click', () => {
+      for (const other of tabs) {
+        const active = other === entry;
+        other.tab.classList.toggle('is-active', active);
+        other.panel.hidden = !active;
+      }
+    });
+  }
+  panel.append(tabBar, panels);
 
   const foot = el('div', 'modal__foot');
   foot.append(el('span', 'modal__note', 'Each integration saves & tests on its own.'));
@@ -938,9 +1003,6 @@ function renderSettingsModal(fields) {
     }
     close();
   });
-
-  const firstInput = panel.querySelector('input');
-  if (firstInput) firstInput.focus();
 }
 
 greetingEl.textContent = greeting();
