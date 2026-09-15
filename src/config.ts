@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { settingValue } from './settings.js';
 
 export const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -29,39 +30,66 @@ function loadEnvFile(path: string): void {
 
 loadEnvFile(resolve(projectRoot, '.env'));
 
+// In-app settings win over .env, which stays as a fallback for existing setups.
 function str(key: string): string | undefined {
+  const fromSettings = settingValue(key);
+  if (fromSettings) return fromSettings;
   const value = process.env[key]?.trim();
   return value ? value : undefined;
 }
 
 function int(key: string, fallback: number): number {
-  const parsed = Number.parseInt(process.env[key] ?? '', 10);
+  const parsed = Number.parseInt(settingValue(key) ?? process.env[key] ?? '', 10);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+/**
+ * Config is read through getters, so values saved from the settings screen take
+ * effect on the next request without a restart.
+ */
 export const config = {
-  port: int('PORT', 4300),
+  get port() {
+    return int('PORT', 4300);
+  },
   /** Seconds a fetched brief is reused before the next refresh hits the APIs. */
-  cacheTtlSeconds: int('CACHE_TTL_SECONDS', 90),
+  get cacheTtlSeconds() {
+    return int('CACHE_TTL_SECONDS', 90);
+  },
   linear: {
-    apiKey: str('LINEAR_API_KEY'),
+    get apiKey() {
+      return str('LINEAR_API_KEY');
+    },
   },
   gitlab: {
-    host: (str('GITLAB_HOST') ?? 'https://gitlab.com').replace(/\/+$/, ''),
-    token: str('GITLAB_TOKEN'),
+    get host() {
+      return (str('GITLAB_HOST') ?? 'https://gitlab.com').replace(/\/+$/, '');
+    },
+    get token() {
+      return str('GITLAB_TOKEN');
+    },
   },
   slack: {
-    userToken: str('SLACK_USER_TOKEN'),
+    get userToken() {
+      return str('SLACK_USER_TOKEN');
+    },
     /** How many recent mentions to pull. */
-    mentionLimit: int('SLACK_MENTION_LIMIT', 20),
+    get mentionLimit() {
+      return int('SLACK_MENTION_LIMIT', 20);
+    },
     /** Cap on DM conversations inspected for unread messages. */
-    dmScanLimit: int('SLACK_DM_SCAN_LIMIT', 25),
+    get dmScanLimit() {
+      return int('SLACK_DM_SCAN_LIMIT', 25);
+    },
   },
   calendar: {
-    icsUrl: str('GOOGLE_CALENDAR_ICS_URL'),
+    get icsUrl() {
+      return str('GOOGLE_CALENDAR_ICS_URL');
+    },
     /** Your calendar address, used to drop invitations you declined. */
-    email: str('GOOGLE_CALENDAR_EMAIL')?.toLowerCase(),
+    get email() {
+      return str('GOOGLE_CALENDAR_EMAIL')?.toLowerCase();
+    },
   },
-} as const;
+};
 
 export type Config = typeof config;

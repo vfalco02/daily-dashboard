@@ -6,6 +6,7 @@ import { config, projectRoot } from './config.js';
 import { getBrief } from './brief.js';
 import { demoBrief } from './demo.js';
 import { addReminder, deleteReminder, listReminders, updateReminder } from './reminders.js';
+import { allSettings, SETTINGS_FIELDS, updateSettings } from './settings.js';
 
 /** DEMO=1 serves sample data so you can see the layout before wiring tokens. */
 const demoMode = process.env.DEMO === '1';
@@ -77,6 +78,57 @@ async function handleReminders(req: IncomingMessage, res: ServerResponse, pathna
   return false;
 }
 
+function maskTail(value: string): string {
+  return value.length <= 4 ? '••••' : `••••${value.slice(-4)}`;
+}
+
+/** Per-field status for the settings screen — never returns a raw secret. */
+function settingsStatus() {
+  const saved = allSettings();
+  return SETTINGS_FIELDS.map((field) => {
+    const fromSettings = saved[field.key]?.trim();
+    const fromEnv = process.env[field.key]?.trim();
+    const effective = fromSettings || fromEnv || '';
+    const base = {
+      key: field.key,
+      integration: field.integration,
+      label: field.label,
+      secret: field.secret,
+      help: field.help,
+      placeholder: field.placeholder,
+      configured: Boolean(effective),
+      source: fromSettings ? 'settings' : fromEnv ? 'env' : 'none',
+    };
+    // Non-secrets echo their value so the form is prefilled; secrets show only a
+    // masked tail, and only when it came from the settings file (never from .env).
+    if (field.secret) return { ...base, preview: fromSettings ? maskTail(fromSettings) : '' };
+    return { ...base, value: effective };
+  });
+}
+
+/** Settings read/write. Returns true when it handled the request. */
+async function handleSettings(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
+  if (pathname !== '/api/settings') return false;
+
+  if (req.method === 'GET') {
+    sendJson(res, 200, { fields: settingsStatus() });
+    return true;
+  }
+  if (req.method === 'POST') {
+    const body = await readJson(req);
+    const patch: Record<string, string | null> = {};
+    for (const field of SETTINGS_FIELDS) {
+      if (!(field.key in body)) continue;
+      const value = body[field.key];
+      patch[field.key] = value === null || typeof value === 'string' ? value : String(value);
+    }
+    updateSettings(patch);
+    sendJson(res, 200, { ok: true, fields: settingsStatus() });
+    return true;
+  }
+  return false;
+}
+
 async function serveStatic(pathname: string): Promise<{ body: Buffer; type: string } | null> {
   const relative = pathname === '/' ? 'index.html' : normalize(pathname).replace(/^(\.\.[/\\])+/, '').slice(1);
   const filePath = join(publicDir, relative);
@@ -110,6 +162,7 @@ const server = createServer(async (req, res) => {
   }
 
   try {
+    if (await handleSettings(req, res, url.pathname)) return;
     if (await handleReminders(req, res, url.pathname)) return;
   } catch (error) {
     sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });

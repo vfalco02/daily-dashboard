@@ -4,6 +4,7 @@ const board = document.getElementById('board');
 const chipsEl = document.getElementById('chips');
 const statusEl = document.getElementById('status');
 const refreshButton = document.getElementById('refresh');
+const settingsButton = document.getElementById('settings');
 const greetingEl = document.getElementById('greeting');
 const dateEl = document.getElementById('date');
 
@@ -615,6 +616,165 @@ async function load({ force = false } = {}) {
   }
 }
 
+// ---- Settings screen --------------------------------------------------------
+
+async function openSettings() {
+  let fields;
+  try {
+    const response = await fetch('/api/settings');
+    if (!response.ok) throw new Error(`server responded ${response.status}`);
+    fields = (await response.json()).fields;
+  } catch (error) {
+    alert(`Couldn't load settings: ${error.message}`);
+    return;
+  }
+  renderSettingsModal(fields);
+}
+
+/** Group fields by integration, preserving first-seen order. */
+function groupByIntegration(fields) {
+  const groups = new Map();
+  for (const field of fields) {
+    if (!groups.has(field.integration)) groups.set(field.integration, []);
+    groups.get(field.integration).push(field);
+  }
+  return groups;
+}
+
+function renderSettingsModal(fields) {
+  const overlay = el('div', 'modal-overlay');
+  const panel = el('div', 'modal');
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.setAttribute('aria-label', 'Integration settings');
+
+  const head = el('div', 'modal__head');
+  head.append(el('h2', 'modal__title', 'Settings'));
+  const closeBtn = el('button', 'modal__close', '×');
+  closeBtn.type = 'button';
+  closeBtn.setAttribute('aria-label', 'Close');
+  head.append(closeBtn);
+  panel.append(head);
+
+  const body = el('div', 'modal__body');
+  const controls = []; // { field, input, clear }
+
+  for (const [integration, groupFields] of groupByIntegration(fields)) {
+    const group = el('section', 'settings-group');
+    group.dataset.source = integration.toLowerCase();
+
+    const configured = groupFields.some((f) => f.secret && f.configured);
+    const heading = el('div', 'settings-group__head');
+    heading.append(el('span', 'settings-group__dot'));
+    heading.append(el('h3', 'settings-group__title', integration));
+    heading.append(el('span', `settings-group__state${configured ? ' is-on' : ''}`, configured ? 'Connected' : 'Not set'));
+    group.append(heading);
+
+    for (const field of groupFields) {
+      const row = el('label', 'settings-field');
+      row.append(el('span', 'settings-field__label', field.label));
+
+      const input = el('input');
+      input.type = field.secret ? 'password' : 'text';
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+      if (field.secret) {
+        input.placeholder =
+          field.source === 'settings'
+            ? `${field.preview || 'saved'} — leave blank to keep`
+            : field.source === 'env'
+              ? 'set in .env — type to override'
+              : 'not set';
+      } else {
+        input.value = field.value || '';
+        if (field.placeholder) input.placeholder = field.placeholder;
+      }
+      row.append(input);
+
+      let clear = null;
+      // Only settings-stored secrets can be cleared from here (.env is on disk).
+      if (field.secret && field.source === 'settings') {
+        const clearLabel = el('label', 'settings-field__clear');
+        clear = el('input');
+        clear.type = 'checkbox';
+        clearLabel.append(clear, document.createTextNode(' remove'));
+        row.append(clearLabel);
+      }
+
+      if (field.help) row.append(el('span', 'settings-field__help', field.help));
+      group.append(row);
+      controls.push({ field, input, clear });
+    }
+    body.append(group);
+  }
+  panel.append(body);
+
+  const foot = el('div', 'modal__foot');
+  const note = el('span', 'modal__note');
+  const cancel = el('button', 'button', 'Cancel');
+  cancel.type = 'button';
+  const save = el('button', 'button button--primary', 'Save');
+  save.type = 'button';
+  foot.append(note, cancel, save);
+  panel.append(foot);
+
+  overlay.append(panel);
+  document.body.append(overlay);
+
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+  const onKey = (event) => {
+    if (event.key === 'Escape') close();
+  };
+  document.addEventListener('keydown', onKey);
+  overlay.addEventListener('mousedown', (event) => {
+    if (event.target === overlay) close();
+  });
+  closeBtn.addEventListener('click', close);
+  cancel.addEventListener('click', close);
+
+  save.addEventListener('click', async () => {
+    const patch = {};
+    for (const { field, input, clear } of controls) {
+      if (field.secret) {
+        if (clear && clear.checked) patch[field.key] = null;
+        else if (input.value.trim()) patch[field.key] = input.value.trim();
+        // untouched secret → leave as is
+      } else {
+        const value = input.value.trim();
+        if (value !== (field.value || '')) patch[field.key] = value === '' ? null : value;
+      }
+    }
+
+    if (Object.keys(patch).length === 0) {
+      close();
+      return;
+    }
+
+    save.disabled = true;
+    note.textContent = 'Saving…';
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!response.ok) throw new Error(`server responded ${response.status}`);
+      close();
+      // Pull a fresh brief so the newly configured sources appear immediately.
+      await load({ force: true });
+    } catch (error) {
+      save.disabled = false;
+      note.textContent = `Failed: ${error.message}`;
+    }
+  });
+
+  const firstInput = panel.querySelector('input');
+  if (firstInput) firstInput.focus();
+}
+
 greetingEl.textContent = greeting();
 dateEl.textContent = new Date().toLocaleDateString(undefined, {
   weekday: 'long',
@@ -622,10 +782,14 @@ dateEl.textContent = new Date().toLocaleDateString(undefined, {
   day: 'numeric',
 });
 
+settingsButton.addEventListener('click', openSettings);
 refreshButton.addEventListener('click', () => load({ force: true }));
 
 document.addEventListener('keydown', (event) => {
   if (event.metaKey || event.ctrlKey || event.altKey) return;
+  // Don't hijack keystrokes while typing in a field or with a dialog open.
+  const tag = event.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || document.querySelector('.modal-overlay')) return;
   if (event.key === 'r') load({ force: true });
 });
 

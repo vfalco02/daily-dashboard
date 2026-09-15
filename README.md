@@ -11,9 +11,16 @@ server-side — the browser never sees them.
 
 ```bash
 npm install
-cp .env.example .env   # then fill in the sources you want
 npm start              # http://localhost:4300
 ```
+
+Then click **⚙ Settings** in the top bar and paste in the tokens for whichever
+sources you want — they're saved to `data/settings.json` (gitignored) and take
+effect on the next refresh, no restart needed. The token reference below explains
+where each one comes from.
+
+Prefer files? You can still put everything in a `.env` (`cp .env.example .env`);
+in-app settings simply take precedence over it. Either way works.
 
 See the layout with sample data before wiring anything up:
 
