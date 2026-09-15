@@ -54,7 +54,7 @@ export function demoBrief(): Brief {
           {
             id: 's1',
             title: 'Dana Whitfield in #eng-platform',
-            excerpt: '@vincent can you take a look at the retry backoff before we cut the release? Happy to pair.',
+            excerpt: '@you can you take a look at the retry backoff before we cut the release? Happy to pair.',
             badges: [{ label: 'Unread', tone: 'info' }],
             timestamp: at(-22),
             rank: 0,
@@ -63,7 +63,7 @@ export function demoBrief(): Brief {
           {
             id: 's2',
             title: 'Rui Almeida in #incidents',
-            excerpt: '@vincent the ingest lag alert fired again overnight — I reset it but it wants a real fix.',
+            excerpt: '@you the ingest lag alert fired again overnight — I reset it but it wants a real fix.',
             timestamp: at(-190),
             rank: 1000,
             tone: 'neutral',
@@ -71,7 +71,7 @@ export function demoBrief(): Brief {
           {
             id: 's4',
             title: 'Priya Raman in #claims-platform',
-            excerpt: '@vincent thanks for the review yesterday — merged it.',
+            excerpt: '@you thanks for the review yesterday — merged it.',
             timestamp: at(-2600),
             rank: 1001,
             tone: 'neutral',
@@ -139,7 +139,7 @@ export function demoBrief(): Brief {
           {
             id: 'g1',
             title: '!1244 · Add idempotency keys to payout webhook',
-            context: 'assured/claims-api',
+            context: 'acme/claims-api',
             badges: [{ label: 'Open 9d', tone: 'warn' }, { label: '12 comments' }, { label: '@rui' }],
             timestamp: at(-2800),
             rank: -9,
@@ -148,7 +148,7 @@ export function demoBrief(): Brief {
           {
             id: 'g2',
             title: '!1251 · Bump pino and drop the custom serialiser',
-            context: 'assured/claims-api',
+            context: 'acme/claims-api',
             badges: [{ label: '2 comments' }, { label: '@priya' }],
             timestamp: at(-260),
             rank: -1,
@@ -163,7 +163,7 @@ export function demoBrief(): Brief {
           {
             id: 'g3',
             title: '!1248 · Fix retry backoff off-by-one',
-            context: 'assured/claims-api',
+            context: 'acme/claims-api',
             badges: [{ label: 'Unresolved threads', tone: 'warn' }, { label: '5 comments' }],
             timestamp: at(-70),
             rank: -2,
@@ -172,7 +172,7 @@ export function demoBrief(): Brief {
           {
             id: 'g4',
             title: '!1253 · Spike: queue partitioning',
-            context: 'assured/ingest',
+            context: 'acme/ingest',
             badges: [{ label: 'Draft', tone: 'muted' }],
             timestamp: at(-900),
             rank: 100,

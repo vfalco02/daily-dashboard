@@ -8,7 +8,7 @@ the manifest and the text to put in it.
 ## 1. Create the app from the manifest
 
 1. Go to <https://api.slack.com/apps> → **Create New App** → **From an app manifest**.
-2. Pick the Assured workspace.
+2. Pick your workspace.
 3. Paste the contents of [`slack-app-manifest.yaml`](../slack-app-manifest.yaml) (switch the editor to YAML).
 4. Create.
 
@@ -76,7 +76,7 @@ it through the approval you will see exactly which.
 ## If the install is refused
 
 The rest of the dashboard works without it — the two Slack cards render as hints
-and nothing else changes. Worth asking the admin whether Assured has an approved
+and nothing else changes. Worth asking the admin whether your workspace has an approved
 route for personal read-only integrations; some workspaces keep a pre-approved
 internal app for exactly this.
 
