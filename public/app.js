@@ -6,6 +6,7 @@ const chipsEl = document.getElementById('chips');
 const statusEl = document.getElementById('status');
 const refreshButton = document.getElementById('refresh');
 const settingsButton = document.getElementById('settings');
+const updateButton = document.getElementById('update');
 const greetingEl = document.getElementById('greeting');
 const dateEl = document.getElementById('date');
 const refreshNoteEl = document.getElementById('refresh-note');
@@ -1018,6 +1019,50 @@ dateEl.textContent = new Date().toLocaleDateString(undefined, {
 settingsButton.addEventListener('click', openSettings);
 refreshButton.addEventListener('click', () => load({ force: true }));
 
+// ---- Self-update: check origin for new commits, offer a one-click pull -------
+
+async function checkForUpdates() {
+  try {
+    const status = await fetch('/api/update').then((r) => r.json());
+    if (status.repo && status.behind > 0) {
+      updateButton.hidden = false;
+      updateButton.textContent = `Update · ${status.behind}`;
+      updateButton.title = status.latest ? `New: ${status.latest}${status.dirty ? ' (local changes may block pull)' : ''}` : 'Updates available';
+    } else {
+      updateButton.hidden = true;
+    }
+  } catch {
+    updateButton.hidden = true; // offline or not a git checkout — just hide it
+  }
+}
+
+updateButton.addEventListener('click', async () => {
+  updateButton.disabled = true;
+  const original = updateButton.textContent;
+  updateButton.textContent = 'Updating…';
+  try {
+    const result = await fetch('/api/update', { method: 'POST' }).then((r) => r.json());
+    if (result.ok) {
+      if (result.restartNeeded) {
+        updateButton.textContent = 'Restart server';
+        updateButton.title = 'Code updated — restart the server (npm start) to apply, then reload.';
+        updateButton.disabled = false;
+      } else {
+        updateButton.textContent = 'Reloading…';
+        setTimeout(() => location.reload(), 600); // UI-only change; reload picks it up
+      }
+    } else {
+      updateButton.textContent = original;
+      updateButton.disabled = false;
+      setStatus(`update failed: ${result.error}`);
+    }
+  } catch (error) {
+    updateButton.textContent = original;
+    updateButton.disabled = false;
+    setStatus(`update failed: ${error.message}`);
+  }
+});
+
 // Returning from the Slack OAuth flow: confirm and drop the query param.
 if (new URLSearchParams(location.search).get('slack') === 'connected') {
   setStatus('Slack connected');
@@ -1048,3 +1093,5 @@ applyRefreshInterval(DEFAULT_REFRESH_SECONDS); // until the first brief sets the
 setInterval(setStatus, 30_000);
 load();
 loadReminders();
+checkForUpdates();
+setInterval(checkForUpdates, 15 * 60_000); // re-check for app updates every 15 min

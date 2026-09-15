@@ -157,6 +157,18 @@ body {
   cursor: default;
 }
 
+/* Update button: only shown when the checkout is behind, so make it noticeable. */
+.button--update {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.button--update:hover {
+  background: var(--ok-bg);
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
 /* ---------- source chips ---------- */
 
 .chips {

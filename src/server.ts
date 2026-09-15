@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { extname, join, normalize, resolve } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { config, projectRoot } from './config.js';
@@ -80,6 +82,80 @@ async function handleReminders(req: IncomingMessage, res: ServerResponse, pathna
     }
   }
 
+  return false;
+}
+
+// ---- Self-update via git ----------------------------------------------------
+
+const execFileAsync = promisify(execFile);
+
+async function git(args: string[], timeoutMs = 20_000): Promise<string> {
+  // Non-interactive: never block on a credential/host prompt.
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+  const { stdout } = await execFileAsync('git', args, { cwd: projectRoot, timeout: timeoutMs, env });
+  return stdout.trim();
+}
+
+async function isGitRepo(): Promise<boolean> {
+  try {
+    await git(['rev-parse', '--is-inside-work-tree'], 5_000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Fetch and report how far behind/ahead the checkout is vs its upstream. */
+async function updateStatus(): Promise<Record<string, unknown>> {
+  if (!(await isGitRepo())) return { repo: false };
+  try {
+    await git(['fetch', '--quiet']);
+    const branch = await git(['rev-parse', '--abbrev-ref', 'HEAD']);
+    const upstream = await git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']).catch(() => '');
+    let ahead = 0;
+    let behind = 0;
+    let latest = '';
+    if (upstream) {
+      const counts = await git(['rev-list', '--left-right', '--count', 'HEAD...@{u}']);
+      const [a, b] = counts.split(/\s+/).map((n) => Number.parseInt(n, 10) || 0);
+      ahead = a ?? 0;
+      behind = b ?? 0;
+      if (behind > 0) latest = await git(['log', '-1', '--pretty=%h %s', '@{u}']);
+    }
+    const dirty = (await git(['status', '--porcelain'])).length > 0;
+    return { repo: true, branch, upstream, ahead, behind, latest, dirty };
+  } catch (error) {
+    return { repo: true, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function handleUpdate(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
+  if (pathname !== '/api/update') return false;
+
+  if (req.method === 'GET') {
+    sendJson(res, 200, await updateStatus());
+    return true;
+  }
+  if (req.method === 'POST') {
+    if (!(await isGitRepo())) {
+      sendJson(res, 400, { ok: false, error: 'Not a git checkout — nothing to pull.' });
+      return true;
+    }
+    try {
+      if ((await git(['status', '--porcelain'])).length > 0) {
+        sendJson(res, 409, { ok: false, error: 'You have uncommitted local changes; pull skipped.' });
+        return true;
+      }
+      // What will change tells us whether a server restart is needed.
+      const changed = (await git(['diff', '--name-only', 'HEAD', '@{u}']).catch(() => '')).split('\n').filter(Boolean);
+      const output = await git(['pull', '--ff-only'], 40_000);
+      const codeChanged = changed.some((f) => !f.startsWith('public/') && f !== 'README.md');
+      sendJson(res, 200, { ok: true, output, restartNeeded: codeChanged });
+    } catch (error) {
+      sendJson(res, 200, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
   return false;
 }
 
@@ -302,6 +378,7 @@ const server = createServer(async (req, res) => {
 
   try {
     if (await handleSlackOauth(req, res, url)) return;
+    if (await handleUpdate(req, res, url.pathname)) return;
     if (await handleSourceTest(req, res, url.pathname)) return;
     if (await handleSettings(req, res, url.pathname)) return;
     if (await handleReminders(req, res, url.pathname)) return;
