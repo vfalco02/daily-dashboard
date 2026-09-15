@@ -7,6 +7,11 @@ import { getBrief } from './brief.js';
 import { demoBrief } from './demo.js';
 import { addReminder, deleteReminder, listReminders, updateReminder } from './reminders.js';
 import { allSettings, SETTINGS_FIELDS, SLACK_USER_SCOPES, updateSettings } from './settings.js';
+import { fetchCalendar } from './sources/calendar.js';
+import { fetchGitlab } from './sources/gitlab.js';
+import { fetchLinear } from './sources/linear.js';
+import { fetchSlack } from './sources/slack.js';
+import type { Section } from './types.js';
 
 /** DEMO=1 serves sample data so you can see the layout before wiring tokens. */
 const demoMode = process.env.DEMO === '1';
@@ -106,6 +111,36 @@ function settingsStatus() {
     if (field.secret) return { ...base, preview: fromSettings ? maskTail(fromSettings) : '' };
     return { ...base, value: explicit || field.default || '' };
   });
+}
+
+const SOURCE_LOADERS: Record<string, () => Promise<Section[]>> = {
+  linear: fetchLinear,
+  gitlab: fetchGitlab,
+  slack: fetchSlack,
+  calendar: fetchCalendar,
+};
+
+/** Run one source's real fetch and report whether it connected. */
+async function testSource(source: string): Promise<{ ok: boolean; detail?: string; error?: string }> {
+  const load = SOURCE_LOADERS[source];
+  if (!load) return { ok: false, error: 'Unknown source' };
+  try {
+    const sections = await load();
+    const failed = sections.find((s) => s.error);
+    if (failed?.error) return { ok: false, error: failed.error };
+    if (sections.every((s) => s.hint && s.items.length === 0)) return { ok: false, error: 'Not configured' };
+    const count = sections.reduce((total, s) => total + s.items.length, 0);
+    return { ok: true, detail: `${count} item${count === 1 ? '' : 's'}` };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function handleSourceTest(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
+  const match = pathname.match(/^\/api\/test\/([a-z]+)$/);
+  if (!match || req.method !== 'GET') return false;
+  sendJson(res, 200, await testSource(match[1] as string));
+  return true;
 }
 
 /** Settings read/write. Returns true when it handled the request. */
@@ -266,6 +301,7 @@ const server = createServer(async (req, res) => {
 
   try {
     if (await handleSlackOauth(req, res, url)) return;
+    if (await handleSourceTest(req, res, url.pathname)) return;
     if (await handleSettings(req, res, url.pathname)) return;
     if (await handleReminders(req, res, url.pathname)) return;
   } catch (error) {

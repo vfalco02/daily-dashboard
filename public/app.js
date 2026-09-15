@@ -646,6 +646,22 @@ async function openSettings() {
   renderSettingsModal(fields);
 }
 
+/** Build a settings patch from a set of controls: only changed fields, null clears. */
+function collectPatch(controls) {
+  const patch = {};
+  for (const { field, input, clear } of controls) {
+    if (field.secret) {
+      if (clear && clear.checked) patch[field.key] = null;
+      else if (input.value.trim()) patch[field.key] = input.value.trim();
+      // untouched secret → leave as is
+    } else {
+      const value = input.value.trim();
+      if (value !== (field.value || '')) patch[field.key] = value === '' ? null : value;
+    }
+  }
+  return patch;
+}
+
 /** Group fields by integration, preserving first-seen order. */
 function groupByIntegration(fields) {
   const groups = new Map();
@@ -674,20 +690,27 @@ function renderSettingsModal(fields) {
   const body = el('div', 'modal__body');
   const controls = []; // { field, input, clear }
 
+  let dirty = false; // whether anything was saved, so we refresh the board on close
+  const testable = new Set(['linear', 'gitlab', 'slack', 'calendar']);
+
   for (const [integration, groupFields] of groupByIntegration(fields)) {
+    const source = integration.toLowerCase();
     const group = el('section', 'settings-group');
-    group.dataset.source = integration.toLowerCase();
+    group.dataset.source = source;
 
     const heading = el('div', 'settings-group__head');
     heading.append(el('span', 'settings-group__dot'));
     heading.append(el('h3', 'settings-group__title', integration));
     // The Connected/Not set pill only makes sense where there's a credential.
+    let pill = null;
     if (groupFields.some((f) => f.secret)) {
-      const configured = groupFields.some((f) => f.secret && f.configured);
-      heading.append(el('span', `settings-group__state${configured ? ' is-on' : ''}`, configured ? 'Connected' : 'Not set'));
+      const on = groupFields.some((f) => f.secret && f.configured);
+      pill = el('span', `settings-group__state${on ? ' is-on' : ''}`, on ? 'Connected' : 'Not set');
+      heading.append(pill);
     }
     group.append(heading);
 
+    const groupControls = [];
     for (const field of groupFields) {
       const row = el('label', 'settings-field');
       row.append(el('span', 'settings-field__label', field.label));
@@ -722,37 +745,88 @@ function renderSettingsModal(fields) {
 
       if (field.help) row.append(el('span', 'settings-field__help', field.help));
       group.append(row);
-      controls.push({ field, input, clear });
+      const control = { field, input, clear };
+      groupControls.push(control);
+      controls.push(control);
     }
 
-    // Slack gets a one-click OAuth button that fills the user token for you.
+    // Per-integration actions: a status line and a Save button that also tests.
+    const actions = el('div', 'settings-actions');
+    const status = el('span', 'settings-status');
+
     if (integration === 'Slack') {
       const hasApp = groupFields.some((f) => f.key === 'SLACK_CLIENT_ID' && f.configured)
         && groupFields.some((f) => f.key === 'SLACK_CLIENT_SECRET' && f.configured);
-      const connect = el('button', 'button button--primary settings-connect', 'Connect with Slack');
-      connect.type = 'button';
+      const oauth = el('button', 'button settings-connect', 'Connect with Slack');
+      oauth.type = 'button';
       if (!hasApp) {
-        connect.disabled = true;
-        connect.title = 'Add the Client ID and secret above (Save first), then connect.';
+        oauth.disabled = true;
+        oauth.title = 'Add the Client ID and secret, save, then connect.';
       }
-      connect.addEventListener('click', () => {
+      oauth.addEventListener('click', () => {
         window.location.href = '/slack/install';
       });
-      group.append(connect);
-      group.append(el('span', 'settings-field__help', 'Register redirect URL http://localhost:4300/slack/oauth/callback in your Slack app.'));
+      actions.append(oauth);
     }
+
+    const saveBtn = el('button', 'button button--primary', testable.has(source) ? 'Save & test' : 'Save');
+    saveBtn.type = 'button';
+    actions.append(saveBtn, status);
+    group.append(actions);
+
+    saveBtn.addEventListener('click', async () => {
+      const patch = collectPatch(groupControls);
+      saveBtn.disabled = true;
+      status.className = 'settings-status';
+      status.textContent = 'Saving…';
+      try {
+        if (Object.keys(patch).length) {
+          const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(patch),
+          });
+          if (!response.ok) throw new Error(`save failed (${response.status})`);
+        }
+        dirty = true;
+        if (testable.has(source)) {
+          status.textContent = 'Testing…';
+          const result = await fetch(`/api/test/${source}`).then((r) => r.json());
+          if (result.ok) {
+            status.textContent = `✓ Connected${result.detail ? ` · ${result.detail}` : ''}`;
+            status.classList.add('is-ok');
+            if (pill) {
+              pill.textContent = 'Connected';
+              pill.classList.add('is-on');
+            }
+          } else {
+            status.textContent = `✗ ${result.error || 'not connected'}`;
+            status.classList.add('is-err');
+            if (pill) {
+              pill.textContent = 'Not set';
+              pill.classList.remove('is-on');
+            }
+          }
+        } else {
+          status.textContent = 'Saved';
+        }
+      } catch (error) {
+        status.textContent = `✗ ${error.message}`;
+        status.classList.add('is-err');
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
 
     body.append(group);
   }
   panel.append(body);
 
   const foot = el('div', 'modal__foot');
-  const note = el('span', 'modal__note');
-  const cancel = el('button', 'button', 'Cancel');
-  cancel.type = 'button';
-  const save = el('button', 'button button--primary', 'Save');
-  save.type = 'button';
-  foot.append(note, cancel, save);
+  foot.append(el('span', 'modal__note', 'Each integration saves & tests on its own.'));
+  const done = el('button', 'button button--primary', 'Done');
+  done.type = 'button';
+  foot.append(done);
   panel.append(foot);
 
   overlay.append(panel);
@@ -761,6 +835,7 @@ function renderSettingsModal(fields) {
   const close = () => {
     overlay.remove();
     document.removeEventListener('keydown', onKey);
+    if (dirty) load({ force: true });
   };
   const onKey = (event) => {
     if (event.key === 'Escape') close();
@@ -770,42 +845,24 @@ function renderSettingsModal(fields) {
     if (event.target === overlay) close();
   });
   closeBtn.addEventListener('click', close);
-  cancel.addEventListener('click', close);
 
-  save.addEventListener('click', async () => {
-    const patch = {};
-    for (const { field, input, clear } of controls) {
-      if (field.secret) {
-        if (clear && clear.checked) patch[field.key] = null;
-        else if (input.value.trim()) patch[field.key] = input.value.trim();
-        // untouched secret → leave as is
-      } else {
-        const value = input.value.trim();
-        if (value !== (field.value || '')) patch[field.key] = value === '' ? null : value;
+  // Done saves any edits not yet saved via a group button, then closes.
+  done.addEventListener('click', async () => {
+    const patch = collectPatch(controls);
+    if (Object.keys(patch).length) {
+      done.disabled = true;
+      try {
+        await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        });
+        dirty = true;
+      } catch {
+        // If it fails, the per-group buttons still report their own errors.
       }
     }
-
-    if (Object.keys(patch).length === 0) {
-      close();
-      return;
-    }
-
-    save.disabled = true;
-    note.textContent = 'Saving…';
-    try {
-      const response = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-      });
-      if (!response.ok) throw new Error(`server responded ${response.status}`);
-      close();
-      // Pull a fresh brief so the newly configured sources appear immediately.
-      await load({ force: true });
-    } catch (error) {
-      save.disabled = false;
-      note.textContent = `Failed: ${error.message}`;
-    }
+    close();
   });
 
   const firstInput = panel.querySelector('input');
