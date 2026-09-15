@@ -51,16 +51,14 @@ export function demoBrief(): Brief {
         key: 'slack-mentions',
         label: 'Slack · mentions',
         source: 'slack',
-        unread: 1,
         items: [
           {
             id: 's1',
             title: 'Dana Whitfield in #eng-platform',
             excerpt: '@you can you take a look at the retry backoff before we cut the release? Happy to pair.',
-            badges: [{ label: 'Unread', tone: 'info' }],
             timestamp: at(-22),
             rank: 0,
-            tone: 'info',
+            tone: 'neutral',
           },
           {
             id: 's2',

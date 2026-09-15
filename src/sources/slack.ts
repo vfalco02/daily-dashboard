@@ -158,24 +158,6 @@ function afterDate(days: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/**
- * A mention is unread when it lands after the channel's `last_read` marker.
- * conversations.info returns that marker per member, so cache one lookup per
- * distinct channel rather than per mention.
- */
-async function lastReadByChannel(channelIds: string[]): Promise<Map<string, string>> {
-  const marks = new Map<string, string>();
-  await mapLimit(channelIds, 4, async (id) => {
-    try {
-      const info = await slack<ConversationInfoResponse>('conversations.info', { channel: id });
-      if (info.channel?.last_read) marks.set(id, info.channel.last_read);
-    } catch {
-      // Channels we can't inspect (e.g. not a member) stay absent -> treated as read.
-    }
-  });
-  return marks;
-}
-
 async function searchMentions(query: string, count: string): Promise<SlackMatch[]> {
   const result = await slack<SearchResponse>('search.messages', {
     query,
@@ -255,11 +237,13 @@ async function fetchMentions(me: AuthResponse, groups: UserGroups): Promise<{ di
     .filter((h) => Number.parseFloat(h.match.ts) >= cutoff)
     .sort((a, b) => Number.parseFloat(b.match.ts) - Number.parseFloat(a.match.ts));
 
-  const channelIds = [...new Set(entries.map((h) => h.match.channel?.id).filter(Boolean) as string[])];
-  const [marks, names] = await Promise.all([
-    lastReadByChannel(channelIds),
-    resolveUserNames(entries.flatMap((h) => mentionedUserIds(h.match.text ?? '')), groups.byId),
-  ]);
+  // Note: we deliberately don't mark mentions read/unread. A channel's last_read
+  // doesn't track mentions read in Slack's Activity view or inside threads, so it
+  // produces false "unread" flags — and Slack exposes no per-mention read state.
+  const names = await resolveUserNames(
+    entries.flatMap((h) => mentionedUserIds(h.match.text ?? '')),
+    groups.byId,
+  );
 
   const toItem = ({ match, aliases }: MentionHit, index: number, showAlias: boolean): Item => {
     const channel = match.channel?.name
@@ -268,12 +252,7 @@ async function fetchMentions(me: AuthResponse, groups: UserGroups): Promise<{ di
         ? 'Direct message'
         : 'Slack';
 
-    const lastRead = match.channel?.id ? marks.get(match.channel.id) : undefined;
-    const unread = lastRead ? Number.parseFloat(match.ts) > Number.parseFloat(lastRead) : false;
-
     const badges: Badge[] = [];
-    // Unread reads as a status pill (like a Linear state), not by dimming the rest.
-    if (unread) badges.push({ label: 'Unread', tone: 'info' });
     if (showAlias && aliases.size) badges.push({ label: [...aliases].join(', '), tone: 'neutral' });
 
     return {
@@ -284,10 +263,8 @@ async function fetchMentions(me: AuthResponse, groups: UserGroups): Promise<{ di
       excerpt: excerpt(flatten(match.text ?? '', names)),
       badges: badges.length ? badges : undefined,
       timestamp: tsToIso(match.ts),
-      // Unread float to the top; both groups stay newest-first within themselves.
-      rank: (unread ? 0 : 1000) + index,
-      // Read items are full-opacity neutral; unread get a blue edge marker.
-      tone: unread ? 'info' : 'neutral',
+      rank: index, // entries are already newest-first
+      tone: 'neutral',
     };
   };
 
