@@ -78,6 +78,8 @@ like a password: anyone holding it can read your calendar. Set
   column or across to another (empty columns appear as drop targets while you
   drag). The arrangement is saved per-browser in `localStorage`, so it sticks
   across refreshes and restarts. Clearing site data resets it to the default.
+- **Collapse a card** by clicking its header (or the ▾ chevron); the count stays
+  visible in the header. Collapsed state is also saved per-browser.
 
 ## Reminders
 

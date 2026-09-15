@@ -101,6 +101,62 @@ function markEmptyColumns() {
   }
 }
 
+// ---- Collapsible cards ------------------------------------------------------
+// Which cards are collapsed is a per-viewer preference, stored as a list of keys.
+
+const COLLAPSED_KEY = 'dashboard.collapsed.v1';
+
+function loadCollapsed() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '[]'));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveCollapsed(set) {
+  try {
+    localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...set]));
+  } catch {
+    // Non-persistent storage — collapse still works for the session.
+  }
+}
+
+const collapsed = loadCollapsed();
+
+/** Wire a header's chevron (and header clicks) to collapse/expand the card by key. */
+function attachCollapse(card, head, key) {
+  const chevron = el('button', 'card__collapse', '▾');
+  chevron.type = 'button';
+  chevron.setAttribute('aria-label', 'Collapse or expand section');
+  head.append(chevron);
+
+  const apply = () => {
+    const isCollapsed = collapsed.has(key);
+    card.classList.toggle('card--collapsed', isCollapsed);
+    chevron.setAttribute('aria-expanded', String(!isCollapsed));
+  };
+  const toggle = () => {
+    if (collapsed.has(key)) collapsed.delete(key);
+    else collapsed.add(key);
+    saveCollapsed(collapsed);
+    apply();
+    capScrollSections(); // a re-expanded list needs its height cap recomputed
+  };
+
+  chevron.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggle();
+  });
+  head.addEventListener('click', (event) => {
+    // Header clicks toggle too, except when grabbing the drag handle.
+    if (event.target.closest('.card__grip')) return;
+    toggle();
+  });
+
+  apply();
+}
+
 let draggedCard = null;
 
 /** A grip in the card header that arms dragging (so links/scroll still work elsewhere). */
@@ -258,6 +314,7 @@ function renderSection(section) {
   if (section.items.length) head.append(el('span', 'card__count', String(section.items.length)));
   card.append(head);
   attachCardDrag(card);
+  attachCollapse(card, head, section.key);
 
   if (section.error) {
     card.append(el('p', 'card__note card__note--error', section.error));
@@ -286,6 +343,7 @@ function renderSection(section) {
  */
 function capScrollSections() {
   for (const host of board.querySelectorAll('.card__scroll[data-max-visible]')) {
+    if (host.offsetParent === null) continue; // inside a collapsed card; nothing to measure
     const max = Number(host.dataset.maxVisible);
     const rows = host.children;
     if (rows.length > max) {
@@ -380,6 +438,7 @@ function buildRemindersCard() {
   head.append(reminderCountEl);
   card.append(head);
   attachCardDrag(card);
+  attachCollapse(card, head, 'reminders');
 
   const form = el('form', 'reminder-add');
   reminderInput = el('input');

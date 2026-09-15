@@ -319,8 +319,41 @@ body {
   gap: 8px;
   padding: 11px 14px;
   border-bottom: 1px solid var(--border);
+  cursor: pointer;
   /* Faint wash of the source colour so each column reads as a set. */
   background: color-mix(in srgb, var(--source-color, transparent) 9%, var(--surface-2));
+}
+
+/* ---------- collapse ---------- */
+
+.card__collapse {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.card__collapse:hover {
+  color: var(--text);
+}
+
+.card--collapsed .card__collapse {
+  transform: rotate(-90deg);
+}
+
+/* Collapsed: keep only the header. */
+.card--collapsed > :not(.card__head) {
+  display: none;
+}
+
+.card--collapsed .card__head {
+  border-bottom: none;
 }
 
 /* Coloured dot before the section title, matching the source. */
