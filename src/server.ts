@@ -94,6 +94,7 @@ function settingsStatus() {
       integration: field.integration,
       label: field.label,
       secret: field.secret,
+      number: Boolean(field.number),
       help: field.help,
       placeholder: field.placeholder,
       configured: Boolean(explicit),

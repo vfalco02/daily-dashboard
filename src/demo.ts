@@ -18,6 +18,7 @@ export function demoBrief(): Brief {
   return {
     generatedAt: new Date().toISOString(),
     durationMs: 0,
+    rows: { linear: 0, gitlab: 0, slack: 5, calendar: 0, reminders: 0 },
     sections: [
       {
         key: 'calendar-today',

@@ -324,11 +324,13 @@ function renderSection(section) {
   }
 
   if (section.items.length) {
-    // When capped, items live in a scroll container we height-limit after layout.
-    const host = section.maxVisible ? el('div', 'card__scroll') : card;
+    // Per-source cap from settings; when set, items live in a scroll container
+    // we height-limit after layout.
+    const cap = rowCaps[section.source] || 0;
+    const host = cap ? el('div', 'card__scroll') : card;
     for (const item of section.items) host.append(renderItem(item));
     if (host !== card) {
-      if (section.items.length > section.maxVisible) host.dataset.maxVisible = String(section.maxVisible);
+      if (section.items.length > cap) host.dataset.maxVisible = String(cap);
       card.append(host);
     }
   } else if (!section.error) {
@@ -343,15 +345,17 @@ function renderSection(section) {
  * so measure the top of row N+1 rather than guessing a pixel height.
  */
 function capScrollSections() {
-  for (const host of board.querySelectorAll('.card__scroll[data-max-visible]')) {
+  for (const host of board.querySelectorAll('[data-max-visible]')) {
     if (host.offsetParent === null) continue; // inside a collapsed card; nothing to measure
     const max = Number(host.dataset.maxVisible);
     const rows = host.children;
-    if (rows.length > max) {
+    if (max > 0 && rows.length > max) {
       const cut = rows[max].offsetTop - host.firstElementChild.offsetTop;
       host.style.maxHeight = `${cut}px`;
+      host.style.overflowY = 'auto';
     } else {
       host.style.maxHeight = '';
+      host.style.overflowY = '';
     }
   }
 }
@@ -390,6 +394,8 @@ function render(brief) {
   const typing = document.activeElement === reminderInput;
   const caret = typing ? [reminderInput.selectionStart, reminderInput.selectionEnd] : null;
 
+  rowCaps = brief.rows || {};
+
   // Reminders is a draggable card like any other; it just uses the persistent node.
   const cards = [
     { key: 'reminders', source: 'reminders', el: ensureRemindersCard() },
@@ -426,6 +432,9 @@ let reminderInput = null;
 let reminderListEl = null;
 let reminderCountEl = null;
 let reminders = [];
+
+/** Per-source row caps from the latest brief (0 = show all). */
+let rowCaps = {};
 
 function buildRemindersCard() {
   const card = el('section', 'card');
@@ -503,6 +512,7 @@ function renderReminderList() {
 
   reminderListEl.replaceChildren();
   if (reminders.length === 0) {
+    delete reminderListEl.dataset.maxVisible;
     reminderListEl.append(el('p', 'card__empty', 'Nothing yet — jot something above.'));
     return;
   }
@@ -510,6 +520,11 @@ function renderReminderList() {
   for (const reminder of [...active, ...done]) {
     reminderListEl.append(renderReminder(reminder));
   }
+  // Apply the per-source row cap (same scroll mechanism as the sections).
+  const cap = rowCaps.reminders || 0;
+  if (cap && reminders.length > cap) reminderListEl.dataset.maxVisible = String(cap);
+  else delete reminderListEl.dataset.maxVisible;
+  capScrollSections();
 }
 
 function renderReminder(reminder) {
@@ -663,11 +678,14 @@ function renderSettingsModal(fields) {
     const group = el('section', 'settings-group');
     group.dataset.source = integration.toLowerCase();
 
-    const configured = groupFields.some((f) => f.secret && f.configured);
     const heading = el('div', 'settings-group__head');
     heading.append(el('span', 'settings-group__dot'));
     heading.append(el('h3', 'settings-group__title', integration));
-    heading.append(el('span', `settings-group__state${configured ? ' is-on' : ''}`, configured ? 'Connected' : 'Not set'));
+    // The Connected/Not set pill only makes sense where there's a credential.
+    if (groupFields.some((f) => f.secret)) {
+      const configured = groupFields.some((f) => f.secret && f.configured);
+      heading.append(el('span', `settings-group__state${configured ? ' is-on' : ''}`, configured ? 'Connected' : 'Not set'));
+    }
     group.append(heading);
 
     for (const field of groupFields) {
@@ -675,7 +693,8 @@ function renderSettingsModal(fields) {
       row.append(el('span', 'settings-field__label', field.label));
 
       const input = el('input');
-      input.type = field.secret ? 'password' : 'text';
+      input.type = field.secret ? 'password' : field.number ? 'number' : 'text';
+      if (field.number) input.min = '0';
       input.autocomplete = 'off';
       input.spellcheck = false;
       if (field.secret) {

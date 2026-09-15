@@ -87,6 +87,9 @@ like a password: anyone holding it can read your calendar. Set
   across refreshes and restarts. Clearing site data resets it to the default.
 - **Collapse a card** by clicking its header (or the ▾ chevron); the count stays
   visible in the header. Collapsed state is also saved per-browser.
+- **Cap rows per source** in ⚙ Settings — each source (and Reminders) has a
+  "Rows before scroll" number; 0 shows all, anything else caps the list there and
+  scrolls the rest. Slack defaults to 5, the others to unlimited.
 
 ## Reminders
 

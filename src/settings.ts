@@ -46,11 +46,26 @@ export type SettingField = {
   integration: string;
   label: string;
   secret: boolean;
+  /** Render as a number input (a small integer setting rather than a credential). */
+  number?: boolean;
   help?: string;
   placeholder?: string;
   /** Value used when this field is left unset (non-secret fields only). */
   default?: string;
 };
+
+/** A "rows before scroll" field for a source (0 = show all). */
+function rowsField(integration: string, key: string, def: string): SettingField {
+  return {
+    key,
+    integration,
+    label: 'Rows before scroll',
+    secret: false,
+    number: true,
+    default: def,
+    help: '0 shows all rows; otherwise the list caps here and scrolls.',
+  };
+}
 
 /** User-token scopes the dashboard needs — the single source of truth for the
  *  OAuth flow, the app manifest, and the docs. */
@@ -73,6 +88,7 @@ export const SETTINGS_FIELDS: SettingField[] = [
     secret: true,
     help: 'Linear → Settings → Security & access → Personal API keys → New key',
   },
+  rowsField('Linear', 'ROWS_LINEAR', '0'),
   {
     key: 'GITLAB_TOKEN',
     integration: 'GitLab',
@@ -89,6 +105,7 @@ export const SETTINGS_FIELDS: SettingField[] = [
     default: 'https://gitlab.com',
     help: 'Defaults to https://gitlab.com — only change for a self-managed instance.',
   },
+  rowsField('GitLab', 'ROWS_GITLAB', '0'),
   {
     key: 'SLACK_CLIENT_ID',
     integration: 'Slack',
@@ -110,6 +127,7 @@ export const SETTINGS_FIELDS: SettingField[] = [
     secret: true,
     help: 'Filled automatically by "Connect with Slack", or paste one manually.',
   },
+  rowsField('Slack', 'ROWS_SLACK', '5'),
   {
     key: 'GOOGLE_CALENDAR_ICS_URL',
     integration: 'Calendar',
@@ -124,4 +142,6 @@ export const SETTINGS_FIELDS: SettingField[] = [
     secret: false,
     help: 'Lets the dashboard hide invitations you declined.',
   },
+  rowsField('Calendar', 'ROWS_CALENDAR', '0'),
+  rowsField('Reminders', 'ROWS_REMINDERS', '0'),
 ];

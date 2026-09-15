@@ -101,6 +101,24 @@ export const config = {
       return str('GOOGLE_CALENDAR_EMAIL')?.toLowerCase();
     },
   },
+  /** Per-source row caps before a list scrolls; 0 means show all. */
+  rows: {
+    get linear() {
+      return int('ROWS_LINEAR', 0);
+    },
+    get gitlab() {
+      return int('ROWS_GITLAB', 0);
+    },
+    get slack() {
+      return int('ROWS_SLACK', 5);
+    },
+    get calendar() {
+      return int('ROWS_CALENDAR', 0);
+    },
+    get reminders() {
+      return int('ROWS_REMINDERS', 0);
+    },
+  },
 };
 
 export type Config = typeof config;

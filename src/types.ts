@@ -52,4 +52,6 @@ export type Brief = {
   generatedAt: string;
   durationMs: number;
   sections: Section[];
+  /** Per-source row caps (0 = show all), applied by the client. */
+  rows: Partial<Record<SourceKey | 'reminders', number>>;
 };

@@ -626,7 +626,8 @@ body {
 }
 
 .settings-field input[type='text'],
-.settings-field input[type='password'] {
+.settings-field input[type='password'],
+.settings-field input[type='number'] {
   width: 100%;
   padding: 8px 10px;
   border: 1px solid var(--border);
@@ -694,17 +695,27 @@ body {
 .card__scroll {
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.card__scroll,
+.reminder-list {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
 
-.card__scroll::-webkit-scrollbar {
+.card__scroll::-webkit-scrollbar,
+.reminder-list::-webkit-scrollbar {
   width: 8px;
 }
 
-.card__scroll::-webkit-scrollbar-thumb {
+.card__scroll::-webkit-scrollbar-thumb,
+.reminder-list::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 4px;
+}
+
+.reminder-list {
+  overscroll-behavior: contain;
 }
 
 /* The last visible row's divider would otherwise touch the scrollbar edge. */

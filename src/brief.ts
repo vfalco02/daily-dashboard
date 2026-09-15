@@ -1,3 +1,4 @@
+import { config } from './config.js';
 import { errorMessage } from './http.js';
 import { fetchCalendar } from './sources/calendar.js';
 import { fetchGitlab } from './sources/gitlab.js';
@@ -62,6 +63,13 @@ export async function buildBrief(): Promise<Brief> {
     generatedAt: new Date().toISOString(),
     durationMs: Date.now() - startedAt,
     sections: settled.flat(),
+    rows: {
+      linear: config.rows.linear,
+      gitlab: config.rows.gitlab,
+      slack: config.rows.slack,
+      calendar: config.rows.calendar,
+      reminders: config.rows.reminders,
+    },
   };
 }
 

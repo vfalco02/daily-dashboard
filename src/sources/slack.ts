@@ -362,7 +362,6 @@ export async function fetchSlack(): Promise<Section[]> {
     source: 'slack',
     items: [],
     emptyLabel: 'No direct mentions.',
-    maxVisible: 5,
   };
   const aliases: Section = {
     key: 'slack-aliases',
@@ -370,7 +369,6 @@ export async function fetchSlack(): Promise<Section[]> {
     source: 'slack',
     items: [],
     emptyLabel: 'No alias mentions.',
-    maxVisible: 5,
   };
   const dms: Section = {
     key: 'slack-dms',
@@ -378,7 +376,6 @@ export async function fetchSlack(): Promise<Section[]> {
     source: 'slack',
     items: [],
     emptyLabel: 'No unread direct messages.',
-    maxVisible: 5,
   };
 
   if (!config.slack.userToken) {
