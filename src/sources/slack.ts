@@ -106,18 +106,33 @@ function mentionedUserIds(text: string): string[] {
   return [...text.matchAll(/<@([A-Z0-9]+)(?:\|[^>]*)?>/g)].map((m) => m[1] as string);
 }
 
-/** Resolve user ids to display names, one lookup each, failures falling back to the id. */
-async function resolveUserNames(ids: string[]): Promise<Map<string, string>> {
+/**
+ * Resolve ids referenced in message markup to names. Person ids (U…/W…) go
+ * through users.info; group ids (S…) are filled from the supplied handle map,
+ * since users.info doesn't know them.
+ */
+async function resolveUserNames(ids: string[], groupHandles?: Map<string, string>): Promise<Map<string, string>> {
   const names = new Map<string, string>();
-  await mapLimit([...new Set(ids)], 4, async (id) => {
-    try {
-      const info = await slack<UserInfoResponse>('users.info', { user: id });
-      const profile = info.user?.profile;
-      names.set(id, profile?.display_name || profile?.real_name || info.user?.real_name || id);
-    } catch {
-      names.set(id, id);
+  const unique = [...new Set(ids)];
+  await mapLimit(
+    unique.filter((id) => /^[UW]/.test(id)),
+    4,
+    async (id) => {
+      try {
+        const info = await slack<UserInfoResponse>('users.info', { user: id });
+        const profile = info.user?.profile;
+        names.set(id, profile?.display_name || profile?.real_name || info.user?.real_name || id);
+      } catch {
+        names.set(id, id);
+      }
+    },
+  );
+  // Group mentions (<@S…>) resolve from usergroups, not users.info.
+  if (groupHandles) {
+    for (const id of unique) {
+      if (id.startsWith('S') && groupHandles.has(id)) names.set(id, groupHandles.get(id) as string);
     }
-  });
+  }
   return names;
 }
 
@@ -162,22 +177,32 @@ async function searchMentions(query: string, count: string): Promise<SlackMatch[
   return result.messages?.matches ?? [];
 }
 
+type UserGroups = {
+  /** Groups the viewer belongs to — the ones we search for mentions of. */
+  mine: { handle: string }[];
+  /** id -> handle for every group, to resolve <@S…> markup in message text. */
+  byId: Map<string, string>;
+};
+
 /**
- * The user groups (@-aliases) the viewer belongs to. `include_users` returns
- * membership in one call. Needs the `usergroups:read` scope — if it's missing we
- * quietly return none so direct mentions still work.
+ * User groups (@-aliases). `include_users` returns membership in one call. Needs
+ * the `usergroups:read` scope — if it's missing we return nothing so direct
+ * mentions still work.
  */
-async function fetchMyUserGroups(me: AuthResponse): Promise<{ handle: string }[]> {
+async function fetchUserGroups(me: AuthResponse): Promise<UserGroups> {
   try {
     const res = await slack<UserGroupsResponse>('usergroups.list', {
       include_users: 'true',
       include_disabled: 'false',
     });
-    return (res.usergroups ?? [])
+    const groups = res.usergroups ?? [];
+    const byId = new Map(groups.filter((g) => g.handle).map((g) => [g.id, g.handle]));
+    const mine = groups
       .filter((g) => !g.date_delete && g.handle && (g.users ?? []).includes(me.user_id))
       .map((g) => ({ handle: g.handle }));
+    return { mine, byId };
   } catch (error) {
-    if (error instanceof SlackApiError && error.code === 'missing_scope') return [];
+    if (error instanceof SlackApiError && error.code === 'missing_scope') return { mine: [], byId: new Map() };
     throw error;
   }
 }
@@ -189,7 +214,7 @@ function matchKey(m: SlackMatch): string {
   return m.iid ?? `${m.channel?.id}-${m.ts}`;
 }
 
-async function fetchMentions(me: AuthResponse): Promise<Item[]> {
+async function fetchMentions(me: AuthResponse, groups: UserGroups): Promise<Item[]> {
   const count = String(config.slack.mentionLimit);
   const after = afterDate(MENTION_WINDOW_DAYS);
 
@@ -198,8 +223,7 @@ async function fetchMentions(me: AuthResponse): Promise<Item[]> {
   if (!direct.length) direct = await searchMentions(`@${me.user} after:${after}`, count);
 
   // Alias pings: one search per user group the viewer is in.
-  const groups = await fetchMyUserGroups(me);
-  const groupResults = await mapLimit(groups, 3, async (group) => ({
+  const groupResults = await mapLimit(groups.mine, 3, async (group) => ({
     handle: group.handle,
     matches: await searchMentions(`@${group.handle} after:${after}`, count),
   }));
@@ -225,7 +249,7 @@ async function fetchMentions(me: AuthResponse): Promise<Item[]> {
   const channelIds = [...new Set(entries.map((h) => h.match.channel?.id).filter(Boolean) as string[])];
   const [marks, names] = await Promise.all([
     lastReadByChannel(channelIds),
-    resolveUserNames(entries.flatMap((h) => mentionedUserIds(h.match.text ?? ''))),
+    resolveUserNames(entries.flatMap((h) => mentionedUserIds(h.match.text ?? '')), groups.byId),
   ]);
 
   return entries.map(({ match, direct: isDirect, aliases }, index): Item => {
@@ -258,7 +282,7 @@ async function fetchMentions(me: AuthResponse): Promise<Item[]> {
   });
 }
 
-async function fetchUnreadDms(me: AuthResponse): Promise<Item[]> {
+async function fetchUnreadDms(me: AuthResponse, groups: UserGroups): Promise<Item[]> {
   const list = await slack<ConversationsResponse>('users.conversations', {
     types: 'im,mpim',
     exclude_archived: 'true',
@@ -303,6 +327,7 @@ async function fetchUnreadDms(me: AuthResponse): Promise<Item[]> {
       ...([e.channel.user, e.latest.user].filter(Boolean) as string[]),
       ...mentionedUserIds(e.latest.text ?? ''),
     ]),
+    groups.byId,
   );
 
   return withUnread.map((entry): Item => {
@@ -345,8 +370,14 @@ export async function fetchSlack(): Promise<Section[]> {
   }
 
   const me = await slack<AuthResponse>('auth.test', {});
+  // One usergroups lookup, shared by both mentions (for searching + resolving)
+  // and DMs (for resolving group mentions in message text).
+  const groups = await fetchUserGroups(me);
 
-  const [mentionResult, dmResult] = await Promise.allSettled([fetchMentions(me), fetchUnreadDms(me)]);
+  const [mentionResult, dmResult] = await Promise.allSettled([
+    fetchMentions(me, groups),
+    fetchUnreadDms(me, groups),
+  ]);
 
   if (mentionResult.status === 'fulfilled') mentions.items = mentionResult.value;
   else mentions.error = mentionResult.reason instanceof Error ? mentionResult.reason.message : String(mentionResult.reason);
