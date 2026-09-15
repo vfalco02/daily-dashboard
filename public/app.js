@@ -332,12 +332,22 @@ function timeLabelFor(item) {
   return item.timestamp ? relativeTime(item.timestamp) : '';
 }
 
+/** True for items that count toward a card's unread tally: watched-channel
+ *  messages carry an "Unread" badge; unread DMs are unread by definition. */
+function itemIsUnread(item) {
+  if ((item.badges ?? []).some((b) => b.label === 'Unread')) return true;
+  return typeof item.id === 'string' && item.id.startsWith('slack:dm:');
+}
+
 function renderItem(item) {
   const node = el(item.url ? 'a' : 'div', `item item--${item.tone ?? 'neutral'}`);
   if (item.url) {
     node.href = item.url;
     node.target = '_blank';
     node.rel = 'noopener noreferrer';
+    // Opening the message marks it read in Slack; reflect that here at once,
+    // rather than waiting for the next refresh to re-fetch last_read.
+    if (itemIsUnread(item)) node.addEventListener('click', () => markItemRead(node));
   }
 
   const row = el('div', 'item__row');
@@ -362,6 +372,40 @@ function renderItem(item) {
   return node;
 }
 
+/** Optimistically mark one item read: dim it, drop its Unread badge, and
+ *  decrement its card's (and the title's) unread tally. Idempotent per node. */
+function markItemRead(node) {
+  if (node.dataset.read === '1') return;
+  node.dataset.read = '1';
+  node.classList.add('item--read');
+  for (const badge of node.querySelectorAll('.badge')) {
+    if (badge.textContent === 'Unread') badge.remove();
+  }
+  const card = node.closest('.card');
+  if (card) clearOneUnread(card);
+}
+
+/** Drop one from a card's unread indicator, then re-sum the browser title. */
+function clearOneUnread(card) {
+  const next = Math.max(0, Number(card.dataset.unread || 0) - 1);
+  card.dataset.unread = String(next);
+  const badge = card.querySelector('.card__unread');
+  if (badge) {
+    if (next > 0) badge.textContent = `${next} unread`;
+    else badge.remove();
+  }
+  refreshTitleUnread();
+}
+
+/** Recompute the "(N) Today" title from the cards currently on the board. */
+function refreshTitleUnread() {
+  let total = 0;
+  for (const card of board.querySelectorAll('.card[data-unread]')) {
+    total += Number(card.dataset.unread || 0);
+  }
+  document.title = total ? `(${total}) Today` : 'Today';
+}
+
 function renderSection(section) {
   const card = el('section', 'card');
   card.id = `section-${section.key}`;
@@ -372,7 +416,9 @@ function renderSection(section) {
   head.append(makeGrip(card));
   head.append(el('h2', 'card__title', section.label));
   if (section.items.length) head.append(el('span', 'card__count', String(section.items.length)));
-  // Unread indicator, visible even when the card is collapsed.
+  // Unread indicator, visible even when the card is collapsed. The count is
+  // mirrored onto the card so a click can decrement it without a re-fetch.
+  card.dataset.unread = String(section.unread || 0);
   if (section.unread > 0) head.append(el('span', 'card__unread', `${section.unread} unread`));
   card.append(head);
   attachCardDrag(card);

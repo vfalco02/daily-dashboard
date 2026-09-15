@@ -479,6 +479,10 @@ body {
 .item--info::before { background: var(--info); }
 .item--muted { opacity: 0.62; }
 
+/* Optimistically marked read on click: dim it and drop the accent bar. */
+.item--read { opacity: 0.5; }
+.item--read::before { background: transparent; }
+
 .item__row {
   display: flex;
   align-items: baseline;
