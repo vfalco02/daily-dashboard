@@ -15,7 +15,7 @@ type SlackMatch = {
 };
 
 type SearchResponse = SlackEnvelope & { messages?: { matches?: SlackMatch[] } };
-type AuthResponse = SlackEnvelope & { user_id: string; user: string; team: string };
+type AuthResponse = SlackEnvelope & { user_id: string; user: string; team: string; url: string };
 type ConversationsResponse = SlackEnvelope & {
   channels?: { id: string; user?: string }[];
 };
@@ -64,6 +64,17 @@ export async function slack<T extends SlackEnvelope>(method: string, params: Rec
 /** Slack timestamps are "1699999999.000100" seconds-with-microseconds. */
 function tsToIso(ts: string): string {
   return new Date(Number.parseFloat(ts) * 1000).toISOString();
+}
+
+/**
+ * Deep-link to a specific message. Slack has no `message` param on its
+ * `slack://channel` deep link, so build the archive permalink Slack itself
+ * uses (`…/archives/<channel>/p<ts>`), which opens the app on that message.
+ * `me.url` is the workspace base URL from auth.test (has a trailing slash).
+ */
+function messagePermalink(me: AuthResponse, channelId: string, ts: string): string {
+  const base = me.url.replace(/\/$/, '');
+  return `${base}/archives/${channelId}/p${ts.replace('.', '')}`;
 }
 
 /** Common Slack emoji shortcodes → Unicode. Unknown/custom ones are left as-is. */
@@ -332,7 +343,7 @@ async function fetchUnreadDms(me: AuthResponse, groups: UserGroups): Promise<Ite
       id: `slack:dm:${entry.channel.id}`,
       title: who,
       // Deep-link to the specific message, not just the conversation.
-      url: `slack://channel?team=${me.team}&id=${entry.channel.id}&message=${entry.latest.ts}`,
+      url: messagePermalink(me, entry.channel.id, entry.latest.ts),
       context: entry.count > 1 ? `${entry.count} unread` : '1 unread',
       excerpt: excerpt(flatten(entry.latest.text ?? '', names)),
       timestamp: tsToIso(entry.latest.ts),
@@ -396,10 +407,11 @@ export async function fetchWatchedChannels(): Promise<Section[]> {
     if (!channel.id) {
       return { ...section, error: `Channel #${channel.name} not found — are you a member?` };
     }
+    const channelId = channel.id;
     try {
       const [history, info] = await Promise.all([
-        slack<HistoryResponse>('conversations.history', { channel: channel.id, limit }),
-        slack<ConversationInfoResponse>('conversations.info', { channel: channel.id }).catch(() => ({ ok: false }) as ConversationInfoResponse),
+        slack<HistoryResponse>('conversations.history', { channel: channelId, limit }),
+        slack<ConversationInfoResponse>('conversations.info', { channel: channelId }).catch(() => ({ ok: false }) as ConversationInfoResponse),
       ]);
       const lastRead = Number.parseFloat(info.channel?.last_read ?? '');
       const messages = (history.messages ?? []).filter((m) => !m.subtype);
@@ -409,9 +421,9 @@ export async function fetchWatchedChannels(): Promise<Section[]> {
         const unread =
           Number.isFinite(lastRead) && message.user !== me.user_id && Number.parseFloat(message.ts) > lastRead;
         return {
-          id: `slack:chan:${channel.id}:${message.ts}`,
+          id: `slack:chan:${channelId}:${message.ts}`,
           title: message.user ? (names.get(message.user) ?? message.user) : 'message',
-          url: `slack://channel?team=${me.team}&id=${channel.id}&message=${message.ts}`,
+          url: messagePermalink(me, channelId, message.ts),
           excerpt: excerpt(flatten(message.text ?? '', names)),
           badges: unread ? [{ label: 'Unread', tone: 'info' }] : undefined,
           timestamp: tsToIso(message.ts),
