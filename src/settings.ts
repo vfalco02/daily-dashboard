@@ -48,6 +48,8 @@ export type SettingField = {
   secret: boolean;
   help?: string;
   placeholder?: string;
+  /** Value used when this field is left unset (non-secret fields only). */
+  default?: string;
 };
 
 /** The editable settings surfaced in the in-app configuration screen. */
@@ -69,10 +71,11 @@ export const SETTINGS_FIELDS: SettingField[] = [
   {
     key: 'GITLAB_HOST',
     integration: 'GitLab',
-    label: 'Host',
+    label: 'Host (optional)',
     secret: false,
     placeholder: 'https://gitlab.com',
-    help: 'Only change for a self-managed instance.',
+    default: 'https://gitlab.com',
+    help: 'Defaults to https://gitlab.com — only change for a self-managed instance.',
   },
   {
     key: 'SLACK_USER_TOKEN',

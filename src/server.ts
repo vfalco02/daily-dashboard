@@ -88,7 +88,7 @@ function settingsStatus() {
   return SETTINGS_FIELDS.map((field) => {
     const fromSettings = saved[field.key]?.trim();
     const fromEnv = process.env[field.key]?.trim();
-    const effective = fromSettings || fromEnv || '';
+    const explicit = fromSettings || fromEnv || '';
     const base = {
       key: field.key,
       integration: field.integration,
@@ -96,13 +96,14 @@ function settingsStatus() {
       secret: field.secret,
       help: field.help,
       placeholder: field.placeholder,
-      configured: Boolean(effective),
-      source: fromSettings ? 'settings' : fromEnv ? 'env' : 'none',
+      configured: Boolean(explicit),
+      source: fromSettings ? 'settings' : fromEnv ? 'env' : field.default ? 'default' : 'none',
     };
-    // Non-secrets echo their value so the form is prefilled; secrets show only a
-    // masked tail, and only when it came from the settings file (never from .env).
+    // Non-secrets echo their value so the form is prefilled — falling back to the
+    // field's default (e.g. gitlab.com) so it reads as configured-by-default.
+    // Secrets show only a masked tail, and only from the settings file, never .env.
     if (field.secret) return { ...base, preview: fromSettings ? maskTail(fromSettings) : '' };
-    return { ...base, value: effective };
+    return { ...base, value: explicit || field.default || '' };
   });
 }
 
