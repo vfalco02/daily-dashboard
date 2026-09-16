@@ -343,8 +343,12 @@ function renderItem(item) {
   const node = el(item.url ? 'a' : 'div', `item item--${item.tone ?? 'neutral'}`);
   if (item.url) {
     node.href = item.url;
-    node.target = '_blank';
-    node.rel = 'noopener noreferrer';
+    // slack:// deep links hand off to the desktop app in place; opening them in
+    // a new tab just leaves a blank leftover. Only http(s) links get a new tab.
+    if (!item.url.startsWith('slack://')) {
+      node.target = '_blank';
+      node.rel = 'noopener noreferrer';
+    }
     // Opening the message marks it read in Slack; reflect that here at once,
     // rather than waiting for the next refresh to re-fetch last_read.
     if (itemIsUnread(item)) node.addEventListener('click', () => markItemRead(node));

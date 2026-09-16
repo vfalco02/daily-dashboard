@@ -68,14 +68,14 @@ function tsToIso(ts: string): string {
 }
 
 /**
- * Deep-link to a specific message. Slack has no `message` param on its
- * `slack://channel` deep link, so build the archive permalink Slack itself
- * uses (`…/archives/<channel>/p<ts>`), which opens the app on that message.
- * `me.url` is the workspace base URL from auth.test (has a trailing slash).
+ * Open a conversation in the desktop app with no browser tab. `slack://` has no
+ * message-targeting parameter, so this lands on the channel/DM rather than a
+ * specific message — fine for a DM (its unread message is the latest, so you
+ * arrive right at it) and for a channel's recent history. Mentions, where a
+ * specific older message matters, keep the archive permalink from search.
  */
-function messagePermalink(me: AuthResponse, channelId: string, ts: string): string {
-  const base = me.url.replace(/\/$/, '');
-  return `${base}/archives/${channelId}/p${ts.replace('.', '')}`;
+function slackDeepLink(me: AuthResponse, channelId: string): string {
+  return `slack://channel?team=${me.team}&id=${channelId}`;
 }
 
 /** Common Slack emoji shortcodes → Unicode. Unknown/custom ones are left as-is. */
@@ -358,8 +358,8 @@ async function fetchUnreadDms(me: AuthResponse, groups: UserGroups): Promise<Ite
     return {
       id: `slack:dm:${entry.channel.id}`,
       title: who,
-      // Deep-link to the specific message, not just the conversation.
-      url: messagePermalink(me, entry.channel.id, entry.latest.ts),
+      // Open the DM in-app (no browser tab); the unread message is the latest.
+      url: slackDeepLink(me, entry.channel.id),
       context: entry.count > 1 ? `${entry.count} unread` : '1 unread',
       excerpt: excerpt(flatten(entry.latest.text ?? '', names)),
       timestamp: tsToIso(entry.latest.ts),
@@ -439,7 +439,8 @@ export async function fetchWatchedChannels(): Promise<Section[]> {
         return {
           id: `slack:chan:${channelId}:${message.ts}`,
           title: message.user ? (names.get(message.user) ?? message.user) : 'message',
-          url: messagePermalink(me, channelId, message.ts),
+          // Open the channel in-app (no browser tab).
+          url: slackDeepLink(me, channelId),
           excerpt: excerpt(flatten(message.text ?? '', names)),
           badges: unread ? [{ label: 'Unread', tone: 'info' }] : undefined,
           timestamp: tsToIso(message.ts),
