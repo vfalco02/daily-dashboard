@@ -91,9 +91,11 @@ export const config = {
     get mentionLimit() {
       return int('SLACK_MENTION_LIMIT', 20);
     },
-    /** Cap on DM conversations inspected for unread messages. */
+    /** Cap on DM conversations inspected for unread messages. conversations.list
+     *  isn't ordered by recency, so this must exceed your DM count or an active
+     *  DM can fall outside the scan. */
     get dmScanLimit() {
-      return int('SLACK_DM_SCAN_LIMIT', 25);
+      return int('SLACK_DM_SCAN_LIMIT', 100);
     },
     /** Comma-separated channels to watch (opt-in Channels widget). */
     get watchChannels() {

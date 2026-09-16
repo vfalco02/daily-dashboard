@@ -18,6 +18,7 @@ type SearchResponse = SlackEnvelope & { messages?: { matches?: SlackMatch[] } };
 type AuthResponse = SlackEnvelope & { user_id: string; user: string; team: string; url: string };
 type ConversationsResponse = SlackEnvelope & {
   channels?: { id: string; user?: string }[];
+  response_metadata?: { next_cursor?: string };
 };
 type ConversationInfoResponse = SlackEnvelope & {
   channel?: { id: string; last_read?: string; user?: string };
@@ -289,14 +290,29 @@ async function fetchMentions(me: AuthResponse, groups: UserGroups): Promise<{ di
   };
 }
 
-async function fetchUnreadDms(me: AuthResponse, groups: UserGroups): Promise<Item[]> {
-  const list = await slack<ConversationsResponse>('users.conversations', {
-    types: 'im,mpim',
-    exclude_archived: 'true',
-    limit: String(config.slack.dmScanLimit),
-  });
+/**
+ * DM/group-DM conversations to scan for unread messages, paginated up to
+ * `dmScanLimit`. Uses conversations.list rather than users.conversations
+ * because the latter only returns *open* IMs — a DM whose tab you've closed
+ * is invisible to it even when it has unread messages. conversations.list is a
+ * strict superset and needs no extra scopes (im:read + mpim:read).
+ */
+async function listDmConversations(): Promise<{ id: string; user?: string }[]> {
+  const max = config.slack.dmScanLimit;
+  const out: { id: string; user?: string }[] = [];
+  let cursor = '';
+  do {
+    const params: Record<string, string> = { types: 'im,mpim', exclude_archived: 'true', limit: '200' };
+    if (cursor) params.cursor = cursor;
+    const list = await slack<ConversationsResponse>('conversations.list', params);
+    out.push(...(list.channels ?? []));
+    cursor = list.response_metadata?.next_cursor ?? '';
+  } while (cursor && out.length < max);
+  return out.slice(0, max);
+}
 
-  const channels = list.channels ?? [];
+async function fetchUnreadDms(me: AuthResponse, groups: UserGroups): Promise<Item[]> {
+  const channels = await listDmConversations();
 
   const unread = await mapLimit(channels, 4, async (channel) => {
     try {
